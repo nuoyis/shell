@@ -12,7 +12,7 @@ auth-init-shell="init.nuoyis.net"
 #自动获取变量区域
 whois=$(whoami)
 nuo_setnetwork_shell=$(ifconfig -a | grep -o '^\w*' | grep -v 'lo')
-if [ -f "/usr/bin/dnf" ] && [ -d "/etc/yum.repos.d/" ]; then
+if [ -f "/usr/bin/yum" ] && [ -d "/etc/yum.repos.d/" ]; then
 	PM="yum"
 elif [ -f "/usr/bin/apt-get" ] && [ -f "/usr/bin/dpkg" ]; then
 	PM="apt-get"
