@@ -12,6 +12,11 @@ auth-init-shell="init.nuoyis.net"
 #自动获取变量区域
 whois=$(whoami)
 nuo_setnetwork_shell=$(ifconfig -a | grep -o '^\w*' | grep -v 'lo')
+if [ -f "/usr/bin/dnf" ] && [ -d "/etc/yum.repos.d/" ]; then
+	PM="yum"
+elif [ -f "/usr/bin/apt-get" ] && [ -f "/usr/bin/dpkg" ]; then
+	PM="apt-get"
+fi
 
 # 函数类
 
@@ -25,9 +30,49 @@ nuoyis_systemctl_manger(){
 }
 
 # 源安装/更新()
-# nuoyis_install_manger(){
-# 	if [  ]
-# }
+nuoyis_install_manger(){
+	case $1 in
+		0)
+			yes | $PM remove $2 -y
+			;;
+		1)
+			yes | $PM install ${@:2} -y
+			;;
+		2)
+			if [ $PM = "dnf" ];then
+				yes | $PM update
+			fi
+			yes | $PM upgrade
+			;;
+		3)
+			$PM clean all
+			;;
+		4)
+			$PM makecache
+			;;
+		5)
+			if [ $PM = "dnf" ];then
+				yes | $PM $2 install ${@:3} -y
+			fi
+			;;
+		*)
+			echo "错误指令"
+			exit 1
+	esac
+	# if [ $1 -eq 0 ];then
+	# 	yes | $PM remove $2 -y
+	# elif [ $1 -eq 1 ];then
+	# 	yes | $PM install $2 -y
+	# elif [ $1 -eq 2 ];then
+	# 	if [ $PM = "dnf" ];then
+	# 		yes | $PM update
+	# 	fi
+	# 	yes | $PM upgrade
+	# elif [ $1 -eq 3 ];then
+	# 	$PM clean all
+	
+	# fi
+}
 
 # 写入文件
 nuoyis_write_manger(){
@@ -123,17 +168,10 @@ fi
 # systemctl start NetworkManager
 
 echo "安装源更新"
-if [ -f "/usr/bin/dnf" ] && [ -d "/etc/yum.repos.d/" ]; then
-	PM="dnf"
-	reponum=`dnf list | wc -l`
-elif [ -f "/usr/bin/apt-get" ] && [ -f "/usr/bin/dpkg" ]; then
-	PM="apt-get"
-	reponum=`apt list | wc -l`
-fi
-
+reponum=`$PM list | wc -l`
 
 # if [ $reponum -lt 1000 ];then
-	if [ $PM = "dnf" ];then
+	if [ $PM = "yum" ];then
 		mkdir /etc/yum.repos.d/bak
 		mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/
 		cat > /etc/yum.repos.d/$auth.repo << EOF
@@ -188,11 +226,33 @@ gpgcheck=0
 name=${auth} - CRB - Source
 baseurl=https://mirrors.cernet.edu.cn/rocky/\$releasever/CRB/source/tree/
 gpgcheck=0
+
+[${auth}-epel]
+name=${auth} - epel
+# It is much more secure to use the metalink, but if you wish to use a local mirror
+# place its address here.
+baseurl=https://mirrors.cernet.edu.cn/epel/\$releasever/Everything/\$basearch/
+#metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
+gpgcheck=0
+
+[${auth}-epel-debuginfo]
+name=${auth} - epel - Debug
+# It is much more secure to use the metalink, but if you wish to use a local mirror
+# place its address here.
+baseurl=https://mirrors.cernet.edu.cn/epel/\$releasever/Everything/\$basearch/debug/
+#metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-debug-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
+gpgcheck=0
+
+[${auth}-epel-source]
+name=${auth} - epel - Source
+baseurl=https://mirrors.cernet.edu.cn/epel/\$releasever/Everything/source/tree/
+#metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-source-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
+gpgcheck=0
 EOF
 	echo "正在更新dnf源"
-	dnf clean all
-	yes | dnf upgrade 
-	dnf makecache
+	nuoyis_install_manger 3
+	nuoyis_install_manger 2
+	nuoyis_install_manger 4
 	else
 		sudo sed -i -r 's#http://(archive|security).ubuntu.com#https://mirrors.aliyun.com#g' /etc/apt/sources.list && sudo apt-get update
 	fi
@@ -200,34 +260,37 @@ EOF
 
 echo "配置基础系统文件"
 dnf config-manager --set-enabled crb
-yes | dnf install bash* vim net-tools epel-release epel-next-release 
-yes | dnf upgrade
-yes | dnf install https://rpms.remirepo.net/enterprise/remi-release-9.rpm
+nuoyis_install_manger 1 bash* vim net-tools epel-release epel-next-release 
+nuoyis_install_manger 2
+nuoyis_install_manger 1 https://rpms.remirepo.net/enterprise/remi-release-9.rpm
 # 来自https://www.rockylinux.cn
 
 
 echo "更新内核至最新版"
 rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
-yes | dnf install https://www.elrepo.org/elrepo-release-9.el9.elrepo.noarch.rpm
+nuoyis_install_manger 1 https://www.elrepo.org/elrepo-release-9.el9.elrepo.noarch.rpm
 
 sed -i 's/mirrorlist=/#mirrorlist=/g' /etc/yum.repos.d/elrepo.repo
 sed -i 's#elrepo.org/linux#mirrors.cernet.edu.cn/elrepo#g' /etc/yum.repos.d/elrepo.repo
 
 dnf makecache
-yes | dnf --disablerepo=\* --enablerepo=elrepo-kernel install kernel-ml.x86_64
-yes | dnf remove kernel-tools-libs.x86_64 kernel-tools.x86_64
-yes | dnf --disablerepo=\* --enablerepo=elrepo-kernel install kernel-ml-tools.x86_64
+nuoyis_install_manger 5 --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml.x86_64
+nuoyis_install_manger 0 kernel-tools-libs.x86_64 kernel-tools.x86_64
+nuoyis_install_manger 5 --disablerepo=\* --enablerepo=elrepo-kernel install kernel-ml-tools.x86_64
 # kernel-Version=dnf info kernel-ml-tools | grep Version | awk '{print $3}'
 
 #安装宝塔
 # nuoyis_bt_install
 
 echo "安装Docker"
-yes | dnf install dnf-utils device-mapper-persistent-data lvm2
+if [ $PM = "yum" ];then
+nuoyis_install_manger 1 dnf-utils device-mapper-persistent-data lvm2
 dnf config-manager --add-repo https://chinanet.mirrors.ustc.edu.cn/docker-ce/linux/centos/docker-ce.repo
+fi
 sed -i 's+download.docker.com+chinanet.mirrors.ustc.edu.cn/docker-ce+' /etc/yum.repos.d/docker-ce.repo
-dnf makecache -y
-yes | dnf install docker-ce
+nuoyis_install_manger 4
+nuoyis_install_manger 1 docker-ce
+mkdir -p /etc/docker
 touch /etc/docker/daemon.json
 cat > /etc/docker/daemon.json << EOF
 {
