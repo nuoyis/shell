@@ -168,6 +168,7 @@ EOF
 nuoyis_lnmp_install(){
 	echo "安装lnmp"
 	echo "正在测试中，请晚些时候再执行"
+	nuoyis_install_manger 1 pcre pcre-devel zlib zlib-devel libxml2 libxml2-devel readline readline-devel ncurses ncerses-devel perl-devel perl-ExtUtils-Embed openssl-devel
     if [ $nuoyis_lnmp_install_yn = "y" ];then
             # 快速安装
 			yes | dnf module reset php
@@ -179,20 +180,32 @@ nuoyis_lnmp_install(){
     else
             # 编译安装
 			echo "创建lnmp基础文件夹"
-			mkdir -p /$auth-server/{nginx/{webside,server,conf},php,mysql}
+			mkdir -p /$auth-server/{openssl,nginx/{webside,server,conf},php,mysql}
             wget -O nginx.tar.gz https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
             tar -xzvf nginx.tar.gz
             cd nginx-1.27.0
-            ./configure --prefix=/$auth-server/nginx/server --with-http_ssl_module
+			id -u ${auth}_web >/dev/null 2>&1
+			if [ $? -eq 1 ];then
+            	useradd ${auth}_web -s /sbin/nologin -M
+			fi;
+			if [ -d `whereis openssl | cut -d : -f 2 | awk '{print $1}'` ];then
+				nuoyis_openssl=`whereis openssl | cut -d : -f 2 | awk '{print $1}'`
+			else
+				wget https://shell.nuoyis.net/download/openssl-3.3.1.tar.gz
+				tar -xzvf openssl-3.3.1.tar.gz openssl-3.3.1/
+				mv -f ./openssl-3.3.1/* /nuoyis-server/openssl/ &> /dev/null
+				nuoyis_openssl="/nuoyis-server/openssl/"
+				rm -rf ./openssl-3.3.1.tar.gz
+			fi;
+			nuoyis_install_manger 1 gd-devel.x86_64
+			./configure --prefix=/$auth-server/nginx/server --with-openssl=${nuoyis_openssl} --user=${auth}_web --group=${auth}_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
 			make && make install
-			useradd $auth_web -s /sbin/nologin -M
 			mkdir -p /$auth-server/logs/nginx
 			touch /$auth-server/logs/nginx/{error.log,nginx.pid}
 			cd ..
 			rm -rf ./nginx-1.27.0
 			rm -rf ./nginx.tar.gz
 			cat > /$auth-server/nginx/server/conf/nginx.conf << EOF
-user ${auth}_web ${auth}_web;
 worker_processes  1;
 
 error_log  /${auth}-server/logs/nginx/error.log;
@@ -515,8 +528,8 @@ EOF
 		nuoyis_install_manger 0 elrepo-release.noarch
 	fi
 
-	rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
-	nuoyis_install_manger 1 epel-release epel-next-release https://rpms.remirepo.net/enterprise/remi-release-9.rpm https://www.elrepo.org/elrepo-release-9.el9.elrepo.noarch.rpm
+	rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
+	nuoyis_install_manger 1 epel-release epel-next-release https://shell.nuoyis.net/download/remi-release-9.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm
 	sudo sed -e 's!^metalink=!#metalink=!g' \
     -e 's!^#baseurl=!baseurl=!g' \
     -e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.cernet.edu.cn/epel!g' \
@@ -533,7 +546,7 @@ EOF
 echo "系统优化类"
 
 echo "配置基础系统文件"
-nuoyis_install_manger 1 dnf-plugins-core bash* vim net-tools tuned dos2unix gcc gcc-c++ make unzip pcre pcre-devel zlib zlib-devel libxml2 libxml2-devel readline readline-devel ncurses ncerses-devel perl-devel perl-ExtUtils-Embed openssl-devel
+nuoyis_install_manger 1 dnf-plugins-core bash* vim net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple
 
 
 # 来自https://www.rockylinux.cn
