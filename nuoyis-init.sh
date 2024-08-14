@@ -12,6 +12,7 @@ auth-init-shell="init.nuoyis.net"
 #自动获取变量区域
 whois=$(whoami)
 nuo_setnetwork_shell=$(ifconfig -a | grep -o '^\w*' | grep -v 'lo')
+
 if [ -f "/usr/bin/yum" ] && [ -d "/etc/yum.repos.d/" ]; then
 	PM="yum"
 elif [ -f "/usr/bin/apt-get" ] && [ -f "/usr/bin/dpkg" ]; then
@@ -39,7 +40,6 @@ nuoyis_install_manger(){
 			for nuoyis_install in ${@:2}
 			do
 				yes | $PM install $nuoyis_install -y
-				yum clean packages
 			done
 			;;
 		2)
@@ -155,6 +155,9 @@ EOF
 	# 安装宝塔
 	echo yes | source install_panel.sh -y
 
+	# 检查宝塔是否安装成功
+
+
 	# 修复宝塔php8.3 无--enable-mbstring问题
 	curl -sSO https://gitee.com/nuoyis/shell/raw/main/btpanel_bug_update/php.sh
 	mv -f ./php.sh /www/server/panel/install/php.sh 2>/dev/null
@@ -168,15 +171,23 @@ EOF
 nuoyis_lnmp_install(){
 	echo "安装lnmp"
 	echo "正在测试中，请晚些时候再执行"
-	nuoyis_install_manger 1 pcre pcre-devel zlib zlib-devel libxml2 libxml2-devel readline readline-devel ncurses ncerses-devel perl-devel perl-ExtUtils-Embed openssl-devel
-    if [ $nuoyis_lnmp_install_yn = "y" ];then
+	if [ $PM = "yum" ];then
+		nuoyis_install_manger 1 pcre pcre-devel zlib zlib-devel libxml2 libxml2-devel readline readline-devel ncurses ncerses-devel perl-devel perl-ExtUtils-Embed openssl-devel
+    else
+		nuoyis_install_manger 1 apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev
+	fi
+	if [ $nuoyis_lnmp_install_yn = "y" ];then
             # 快速安装
-			yes | dnf module reset php
-			yes | dnf module install php:remi-8.2
-            nuoyis_install_manger 1 nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb*
-			nuoyis_systemctl_manger start nginx
-			nuoyis_systemctl_manger start php-fpm
-			nuoyis_systemctl_manger start mysqld
+			if [ $PM = "yum" ];then
+				yes | dnf module reset php
+				yes | dnf module install php:remi-8.2
+				nuoyis_install_manger 1 nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb*
+				nuoyis_systemctl_manger start nginx
+				nuoyis_systemctl_manger start php-fpm
+				nuoyis_systemctl_manger start mysqld
+			else
+				nuoyis_install_manger 1 nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
+			fi
     else
             # 编译安装
 			echo "创建lnmp基础文件夹"
@@ -485,32 +496,36 @@ name=${auth} - CRB - Source
 baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/CRB/source/tree/
 gpgcheck=0
 
-[${auth}-epel]
-name=${auth} - epel
-# It is much more secure to use the metalink, but if you wish to use a local mirror
-# place its address here.
-baseurl=https://chinanet.mirrors.ustc.edu.cn/epel/\$releasever/Everything/\$basearch/
-#metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
-gpgcheck=0
+# [${auth}-epel]
+# name=${auth} - epel
+# # It is much more secure to use the metalink, but if you wish to use a local mirror
+# # place its address here.
+# baseurl=https://chinanet.mirrors.ustc.edu.cn/epel/\$releasever/Everything/\$basearch/
+# #metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
+# gpgcheck=0
 
-[${auth}-epel-debuginfo]
-name=${auth} - epel - Debug
-# It is much more secure to use the metalink, but if you wish to use a local mirror
-# place its address here.
-baseurl=https://chinanet.mirrors.ustc.edu.cn/epel/\$releasever/Everything/\$basearch/debug/
-#metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-debug-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
-gpgcheck=0
+# [${auth}-epel-debuginfo]
+# name=${auth} - epel - Debug
+# # It is much more secure to use the metalink, but if you wish to use a local mirror
+# # place its address here.
+# baseurl=https://chinanet.mirrors.ustc.edu.cn/epel/\$releasever/Everything/\$basearch/debug/
+# #metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-debug-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
+# gpgcheck=0
 
-[${auth}-epel-source]
-name=${auth} - epel - Source
-baseurl=https://chinanet.mirrors.ustc.edu.cn/epel/\$releasever/Everything/source/tree/
-#metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-source-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
-gpgcheck=0
+# [${auth}-epel-source]
+# name=${auth} - epel - Source
+# baseurl=https://chinanet.mirrors.ustc.edu.cn/epel/\$releasever/Everything/source/tree/
+# #metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-source-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
+# gpgcheck=0
 EOF
-	echo "正在更新dnf源"
-	nuoyis_install_manger 3
-	nuoyis_install_manger 2
-	nuoyis_install_manger 4
+
+	if [ `cat /etc/redhat-release | awk '{print $1$2}'`=="RedHat" ];then
+		if [ ! -f /etc/yum/pluginconf.d/subscription-manager.conf ];then
+			sed -i 's/enabled=1/enabled=0/g' /etc/yum/pluginconf.d/subscription-manager.conf
+		fi
+	fi
+	echo "skip_broken=True" >> /etc/yum.conf
+	echo "skip_broken=True" >> /etc/dnf/dnf.conf
 
 	echo "正在配置附加源"
 	nuoyis_install_manger 7 epel
@@ -529,7 +544,8 @@ EOF
 	fi
 
 	rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
-	nuoyis_install_manger 1 epel-release epel-next-release https://shell.nuoyis.net/download/remi-release-9.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm
+	rpm --import https://mirrors.bfsu.edu.cn/epel/RPM-GPG-KEY-EPEL-9
+	nuoyis_install_manger 1 https://mirrors.bfsu.edu.cn/epel/epel-release-latest-9.noarch.rpm https://mirrors.bfsu.edu.cn/epel/epel-next-release-latest-9.noarch.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm
 	sudo sed -e 's!^metalink=!#metalink=!g' \
     -e 's!^#baseurl=!baseurl=!g' \
     -e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.cernet.edu.cn/epel!g' \
@@ -537,16 +553,28 @@ EOF
     -i /etc/yum.repos.d/epel{,-testing}.repo
 	sed -i 's/mirrorlist=/#mirrorlist=/g' /etc/yum.repos.d/elrepo.repo
 	sed -i 's#elrepo.org/linux#mirrors.cernet.edu.cn/elrepo#g' /etc/yum.repos.d/elrepo.repo
-	nuoyis_install_manger 2
+	nuoyis_install_manger 1 https://shell.nuoyis.net/download/remi-release-9.rpm
 	else
-		sudo sed -i -r 's#http://(archive|security).ubuntu.com#https://mirrors.aliyun.com#g' /etc/apt/sources.list && sudo apt-get update
+		# sudo sed -i -r 's#http://(archive|security).ubuntu.com#https://mirrors.aliyun.com#g' /etc/apt/sources.list && sudo apt-get update
+		echo "debian架构系列正在进入第三方脚本，请注意版本安全"
+		if [ -f /usr/bin/curl ];then
+			curl -sSO https://3lu.cn/main.sh;
+		else 
+			wget -O main.sh https://3lu.cn/main.sh;
+		fi;
+		source main.sh
+		echo "yes"
 	fi
+	echo "正在更新源"
+	nuoyis_install_manger 3
+	nuoyis_install_manger 2
+	nuoyis_install_manger 4
 # fi
 
 echo "系统优化类"
 
 echo "配置基础系统文件"
-nuoyis_install_manger 1 dnf-plugins-core bash* vim net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple
+nuoyis_install_manger 1 dnf-plugins-core bash* vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple
 
 
 # 来自https://www.rockylinux.cn
@@ -601,10 +629,13 @@ fi
 #sudo firewall-cmd --reload
 
 echo "更新内核至最新版"
+if [ $PM = "yum" ];then
 nuoyis_install_manger 5 --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml.x86_64
 nuoyis_install_manger 0 kernel-tools-libs.x86_64 kernel-tools.x86_64
 nuoyis_install_manger 5 --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml-tools.x86_64
-
+else
+	echo "暂不支持debian系列"
+fi
 rm -rf ./nuoyis-init.sh
 
 echo "安装完毕，向前出发吧"
