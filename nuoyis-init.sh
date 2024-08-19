@@ -541,9 +541,9 @@ EOF
 	if [ `cat /etc/redhat-release | awk '{print $1$2}'`=="RedHat" ];then
 		echo "exclude=openssl-libs" >> /etc/yum.conf
 		echo "exclude=openssl-fips-provider" >> /etc/yum.conf
-		if [ ! -f /etc/yum/pluginconf.d/subscription-manager.conf ];then
-			sed -i 's/enabled=1/enabled=0/g' /etc/yum/pluginconf.d/subscription-manager.conf
-		fi
+		nuoyis_install_manger remove subscription-manager-gnome     
+		nuoyis_install_manger remove subscription-manager-firstboot     
+		nuoyis_install_manger remove subscription-manager
 	fi
 	echo "skip_broken=True" >> /etc/yum.conf
 	echo "skip_broken=True" >> /etc/dnf/dnf.conf
