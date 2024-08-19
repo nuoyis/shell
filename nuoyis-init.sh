@@ -514,6 +514,7 @@ gpgcheck=0
 name=${auth} - CRB - Source
 baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/CRB/source/tree/
 gpgcheck=0
+EOF
 
 # [${auth}-epel]
 # name=${auth} - epel
@@ -536,9 +537,10 @@ gpgcheck=0
 # baseurl=https://chinanet.mirrors.ustc.edu.cn/epel/\$releasever/Everything/source/tree/
 # #metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-source-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
 # gpgcheck=0
-EOF
 
 	if [ `cat /etc/redhat-release | awk '{print $1$2}'`=="RedHat" ];then
+		echo "exclude=openssl-libs" >> /etc/yum.conf
+		echo "exclude=openssl-fips-provider" >> /etc/yum.conf
 		if [ ! -f /etc/yum/pluginconf.d/subscription-manager.conf ];then
 			sed -i 's/enabled=1/enabled=0/g' /etc/yum/pluginconf.d/subscription-manager.conf
 		fi
