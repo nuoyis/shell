@@ -1,6 +1,6 @@
 # !/bin/sh
 # 诺依阁-初始化脚本
-
+LANG=en_US.UTF-8
 #变量定义区域
 #手动变量定义区域
 auth="nuoyis"
@@ -12,6 +12,11 @@ auth-init-shell="init.nuoyis.net"
 #自动获取变量区域
 whois=$(whoami)
 nuo_setnetwork_shell=$(ifconfig -a | grep -o '^\w*' | grep -v 'lo')
+if [ -f "/etc/redhat-release" ];then
+	system_name=`cat /etc/redhat-release | awk '{print $1$2}'`
+	system_version=`cat /etc/redhat-release | egrep -o "[0-9].[0-9]"`
+	system_version=${system_version%.*}
+fi
 
 # 检测包管理器
 if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
@@ -34,7 +39,7 @@ nuoyis_download_manager(){
 # 系统项启动
 nuoyis_systemctl_manger(){
 	if [ -n $1 ] && [ -n $2 ];then
-		case $2 in
+		case $1 in
 			"start")
 				systemctl enable --now $2
 				;;
@@ -51,7 +56,9 @@ nuoyis_systemctl_manger(){
 				systemctl reboot
 				;;
 			*)
-				echo "未找到函数请求，请重试"
+				# 无效参数处理
+				echo "错误指令"
+				exit 1
 		esac
 	fi
 }
@@ -389,80 +396,56 @@ nuoyis_docker_install(){
 EOF
 	nuoyis_systemctl_manger start docker
 }
-echo -e "=================================================================="
-echo -e "     诺依阁服务器初始化脚本V2.1"
-echo -e "     更新时间:2024.08.16"
-echo -e "     博客地址:https://blog.nuoyis.net"
-echo -e "     \e[31m\e[1m注意1:执行本脚本即同意作者方不承担执行脚本的后果 \e[0m"
-echo -e "     \e[31m\e[1m注意2:当前脚本pid为$$,如果卡死请执行kill -9 $$ \e[0m"
-echo -e "=================================================================="
-read -p "是否继续执行(y/n):" nuoyis_go
-if [ $nuoyis_go == "n" ];then
-        echo "正在退出脚本"
-        exit 0
-fi
 
-echo "检测是否是root用户"
-if [ $whois != "root" ];then
-	echo "非root用户，无法满足初始化需求"
-	exit 1
-fi
+# 源配置类
+nuoyis_source_installer(){
+	reponum=`$PM list | wc -l`
+	
+	# if [ $reponum -lt 1000 ];then
+		if [ $PM = "yum" ];then
+			echo "正在检查是否存在冲突/模块缺失"
+			# Chat.openai.com 合作编写内容
+			# 日志文件路径
+			log_file="/nuoyis-server/logs/module_disable.log"
+			
+			# 函数：检查并处理模块依赖问题
+			echo "正在检查模块依赖问题..." | tee -a $log_file
+			check_output=$(dnf check || yum check 2>&1)
 
-echo "环境提前配置问答"
-read -p "附加项:是否安装/重装宝塔面板(y/n):" nuoyis_bt
-if [ $nuoyis_bt == "y" ];then
-	echo "宝塔启动安装后，则请在宝塔内安装其他附加环境,将不再提醒其他环境"
-	echo -e "\e[31m\e[1m注意:国内版宝塔安装完毕后，请执行bt 输入5修改密码，6修改用户名,bt命令后14查看默认信息\e[0m"
-	read -p "请按任意键继续" nuoyis_go
-	nuoyis_lnmp=n
-	nuoyis_docker=n
-else
-	read -p "附加项:是否安装LNMP环境(y/n):" nuoyis_lnmp
-	if [ $nuoyis_lnmp == "y" ];then
-	read -p "请输入是快速安装(y)还是编译安装(n):" nuoyis_lnmp_install_yn
-	fi
-	read -p "附加项:是否安装Docker(y/n):" nuoyis_docker
-fi
+			# 使用 grep 提取冲突模块的信息,过滤掉非模块相关的行，比如 "Last metadata expiration check" 等
+			unresolved_modules=$(echo "$check_output" | grep -E "module .*:.*:")
 
-echo "创建$auth服务初始化内容"
-mkdir -p /$auth-server/{logs,shell}
-# for i in 
-# touch /$auth-server/
+			if [ -z "$unresolved_modules" ]; then
+				echo "没有发现模块依赖问题,继续下一步" | tee -a $log_file
+				return 0
+			fi
 
-echo "检测hostname是否设置"
-HOSTNAME_CHECK=$(cat /etc/hostname)
-if [ -z $HOSTNAME_CHECK ];then
-	echo "当前主机名hostname为空，设置默认hostname"
-	hostnamectl set-hostname $auth-init-shell
-fi
+			echo "发现模块依赖问题：" | tee -a $log_file
 
-# echo "网卡(校园网)静态配置"
-# for i in {3..254};
-# do
-# ip=$CIDR.$i
-# ping -c 2 $ip > /dev/null 2>&1
-# if [ $? -eq 1 ]; then
-#     nuoautoip=$ip
-#     break
-# fi
-# done
-# nmcli connection modify $nuo_setnetwork_shell ipv4.method man ipv4.addresses ${nuoautoip}/24 ipv4.gateway ${gateway} ipv4.dns ${dns}
-# nmcli connection up $nuo_setnetwork_shell
-# nmcli connection reload
-# systemctl stop NetworkManager
-# systemctl start NetworkManager
+			# 提取并禁用冲突的模块
+			echo "禁用冲突模块..." | tee -a $log_file
+			while read -r module; do
+				# 提取模块名和版本
+				module_name=$(echo $module | grep -oP '(?<=module )[^:]+:[^ ]+' | sed 's/:[^:]*$//')
+				if [ -n "$module_name" ]; then
+					echo "禁用模块: $module_name" | tee -a $log_file
+					sudo dnf module disable "$module_name" -y || sudo yum module disable "$module_name" -y
+					if [ $? -eq 0 ]; then
+						echo "模块 $module_name 禁用成功" | tee -a $log_file
+					else
+						echo "模块 $module_name 禁用失败" | tee -a $log_file
+					fi
+				fi
+			done
+			echo "模块依赖修复和冲突模块禁用完成。" | tee -a $log_file
 
-echo "安装源更新"
-reponum=`$PM list | wc -l`
-
-# if [ $reponum -lt 1000 ];then
-	if [ $PM = "yum" ];then
-		if [ ! -d /etc/yum.repos.d/bak ];then
-			mkdir -p /etc/yum.repos.d/bak
-		fi
-		mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
-		mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
-		cat > /etc/yum.repos.d/$auth.repo << EOF
+			# Chat.openai.com 合作编写内容结束
+			if [ ! -d /etc/yum.repos.d/bak ];then
+				mkdir -p /etc/yum.repos.d/bak
+			fi
+			mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
+			mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
+			cat > /etc/yum.repos.d/$auth.repo << EOF
 [${auth}-BaseOS]
 name=${auth} - BaseOS
 baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/BaseOS/\$basearch/os/
@@ -538,13 +521,7 @@ EOF
 # #metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-source-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
 # gpgcheck=0
 
-	if [ `cat /etc/redhat-release | awk '{print $1$2}'`=="RedHat" ];then
-		echo "exclude=openssl-libs" >> /etc/yum.conf
-		echo "exclude=openssl-fips-provider" >> /etc/yum.conf
-		nuoyis_install_manger remove subscription-manager-gnome     
-		nuoyis_install_manger remove subscription-manager-firstboot     
-		nuoyis_install_manger remove subscription-manager
-	fi
+
 	echo "skip_broken=True" >> /etc/yum.conf
 	echo "skip_broken=True" >> /etc/dnf/dnf.conf
 
@@ -586,7 +563,170 @@ EOF
 	nuoyis_install_manger clean
 	nuoyis_install_manger update
 	nuoyis_install_manger makecache
+	# fi
+}
+
+
+# 脚本run --> 起始点
+
+echo -e "=================================================================="
+echo -e "     诺依阁服务器初始化脚本V2.1"
+echo -e "     更新时间:2024.08.16"
+echo -e "     博客地址:https://blog.nuoyis.net"
+echo -e "     \e[31m\e[1m注意1:执行本脚本即同意作者方不承担执行脚本的后果 \e[0m"
+echo -e "     \e[31m\e[1m注意2:当前脚本pid为$$,如果卡死请执行kill -9 $$ \e[0m"
+echo -e "=================================================================="
+read -p "是否继续执行(y/n):" nuoyis_go
+if [ $nuoyis_go == "n" ];then
+        echo "正在退出脚本"
+        exit 0
+fi
+
+echo "检测是否是root用户"
+if [ $whois != "root" ];then
+	echo "非root用户，无法满足初始化需求"
+	exit 1
+fi
+
+echo "创建$auth服务初始化内容"
+mkdir -p /$auth-server/{logs,shell}
+# for i in 
+# touch /$auth-server/
+
+echo "检测hostname是否设置"
+HOSTNAME_CHECK=$(cat /etc/hostname)
+if [ -z $HOSTNAME_CHECK ];then
+	echo "当前主机名hostname为空，设置默认hostname"
+	hostnamectl set-hostname $auth-init-shell
+fi
+
+echo "正在检查支持版本"
+if [ $PM == "yum" ];then
+	if [ $system_version -lt 9 ];then
+		echo "不受支持版本,正在检测你的系统"
+		if [ $system_version -eq 8 ] && [ $system_name == "RockyLinux" ];then
+			read -p "是否进行版本更新，反之退出脚本(y/n):" nuoyis_update
+			if [ $nuoyis_update == "n" ];then
+        		echo "正在退出脚本"
+       	 		exit 0
+			else
+				echo -e "警告！！！"
+				echo -e "请保证升级9之前，请先检查是否有重要备份数据，不过本脚本作者精心提醒:生产环境就不要执行脚本了，如果是云厂商只有8版本，且是空白面板可以执行"
+				echo -e "重启后需要重新执行该命令操作下一步，如果同意更新请输入y,更新出现任何问题与作者无关"
+				read -p "是否进行版本更新，反之退出脚本(y/n):" nuoyis_update_again
+				if [ $nuoyis_update_again == "n" ];then
+        			echo "正在退出脚本"
+       	 			exit 0
+				else
+					nuoyis_source_installer
+					# https://www.rockylinux.cn/notes/strong-rocky-linux-8-sheng-ji-zhi-rocky-linux-9-strong.html
+					# 安装 epel 源
+					dnf -y install epel-release
+					
+					# 更新系统至最新版
+					dnf -y update
+
+					# 安装 rpmconf 和 yum-utils
+					dnf -y install rpmconf yum-utils
+					
+					# 执行 rpmconf，如果出现提示信息，请输入 Y 和回车继续，如果没提示继续。
+					yes | rpmconf -a
+					
+					# 安装 rocky-release 包
+					rpm -e --nodeps `rpm -qa|grep rocky-release`
+					rpm -e --nodeps `rpm -qa|grep rocky-gpg-keys`
+					rpm -e --nodeps `rpm -qa|grep rocky-repos`
+					rpm -ivh --nodeps --force https://mirrors.aliyun.com/rockylinux/9/BaseOS/x86_64/os/Packages/r/rocky-gpg-keys-9.4-1.7.el9.noarch.rpm
+					rpm -ivh --nodeps --force https://mirrors.aliyun.com/rockylinux/9/BaseOS/x86_64/os/Packages/r/rocky-release-9.4-1.7.el9.noarch.rpm
+					rpm -ivh --nodeps --force https://mirrors.aliyun.com/rockylinux/9/BaseOS/x86_64/os/Packages/r/rocky-repos-9.4-1.7.el9.noarch.rpm
+					dnf clean all
+					
+					# 升级 Rocky Linux 9
+					rpm -e --nodeps rocky-logos-86.2-1.el8.x86_64
+					dnf -y --releasever=9 --allowerasing --setopt=deltarpm=false distro-sync
+					
+					# 卸载完后重新执行下面的命令
+					dnf clean all
+					dnf -y --releasever=9 --allowerasing --setopt=deltarpm=false distro-sync
+					
+					# 重建 rpm 数据库，出现警告忽略。
+					yes | rpm --rebuilddb
+					
+					# 安装新内核
+					dnf -y install kernel
+					dnf -y install kernel-core
+					dnf -y install shim
+					
+					# 安装基础环境
+					dnf group install minimal-environment -y
+					
+					# 安装 rpmconf 和 yum-utils
+					dnf -y install rpmconf yum-utils
+					
+					# 执行 rpmconf，根据提示一直输入 Y 和回车即可
+					rpmconf -a
+					
+					# 设置采用最新内核引导
+					export grubcfg=`find /boot/ -name rocky`
+					grub2-mkconfig -o $grubcfg/grub.cfg
+					
+					# 更新系统
+					dnf -y update
+					
+					# 重启系统
+					reboot
+				fi
+			fi
+		elif [ $system_version -eq 7 ] && [ $system_name == "Centos" ];then
+			echo "等待更新"
+		elif [ $system_version -eq 8 ] && [ $system_name == "Centos" ];then
+			echo "等待更新"
+		fi
+	else
+		if [ $system_name == "RedHat" ];then
+			echo "exclude=openssl-libs" >> /etc/yum.conf
+			echo "exclude=openssl-fips-provider" >> /etc/yum.conf
+			nuoyis_install_manger remove subscription-manager-gnome     
+			nuoyis_install_manger remove subscription-manager-firstboot     
+			nuoyis_install_manger remove subscription-manager
+		fi
+	fi
+fi
+
+echo "环境提前配置问答"
+read -p "附加项:是否安装/重装宝塔面板(y/n):" nuoyis_bt
+if [ $nuoyis_bt == "y" ];then
+	echo "宝塔启动安装后，则请在宝塔内安装其他附加环境,将不再提醒其他环境"
+	echo -e "\e[31m\e[1m注意:国内版宝塔安装完毕后，请执行bt 输入5修改密码，6修改用户名,bt命令后14查看默认信息\e[0m"
+	read -p "请按任意键继续" nuoyis_go
+	nuoyis_lnmp=n
+	nuoyis_docker=n
+else
+	read -p "附加项:是否安装LNMP环境(y/n):" nuoyis_lnmp
+	if [ $nuoyis_lnmp == "y" ];then
+	read -p "请输入是快速安装(y)还是编译安装(n):" nuoyis_lnmp_install_yn
+	fi
+	read -p "附加项:是否安装Docker(y/n):" nuoyis_docker
+fi
+
+# echo "网卡(校园网)静态配置"
+# for i in {3..254};
+# do
+# ip=$CIDR.$i
+# ping -c 2 $ip > /dev/null 2>&1
+# if [ $? -eq 1 ]; then
+#     nuoautoip=$ip
+#     break
 # fi
+# done
+# nmcli connection modify $nuo_setnetwork_shell ipv4.method man ipv4.addresses ${nuoautoip}/24 ipv4.gateway ${gateway} ipv4.dns ${dns}
+# nmcli connection up $nuo_setnetwork_shell
+# nmcli connection reload
+# systemctl stop NetworkManager
+# systemctl start NetworkManager
+
+echo "安装源更新"
+nuoyis_source_installer
 
 echo "系统优化类"
 
