@@ -643,12 +643,9 @@ if [ $PM == "yum" ];then
 					
 					# 升级 Rocky Linux 9
 					rpm -e --nodeps rocky-logos-86.2-1.el8.x86_64
-					dnf -y --releasever=9 --allowerasing --setopt=deltarpm=false distro-sync
-					
-					# 卸载完后重新执行下面的命令
 					dnf clean all
 					dnf -y --releasever=9 --allowerasing --setopt=deltarpm=false distro-sync
-					
+										
 					# 重建 rpm 数据库，出现警告忽略。
 					yes | rpm --rebuilddb
 					
