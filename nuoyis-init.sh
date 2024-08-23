@@ -404,42 +404,32 @@ nuoyis_source_installer(){
 	# if [ $reponum -lt 1000 ];then
 		if [ $PM = "yum" ];then
 			echo "正在检查是否存在冲突/模块缺失"
-			# Chat.openai.com 合作编写内容
-			# 日志文件路径
-			log_file="/nuoyis-server/logs/module_disable.log"
-			
-			# 函数：检查并处理模块依赖问题
-			echo "正在检查模块依赖问题..." | tee -a $log_file
-			check_output=$(dnf check || yum check 2>&1)
+			echo "正在检查模块依赖问题..."
 
-			# 使用 grep 提取冲突模块的信息,过滤掉非模块相关的行，比如 "Last metadata expiration check" 等
-			unresolved_modules=$(echo "$check_output" | grep -E "module .*:.*:")
+			nuoyis_install_check_modules_bug=$(yum check 2>&1)
 
-			if [ -z "$unresolved_modules" ]; then
-				echo "没有发现模块依赖问题,继续下一步" | tee -a $log_file
-				return 0
+			if [ -z "$nuoyis_install_check_modules_bug" ]; then
+				echo "没有发现模块依赖问题,继续下一步"
+			else
+				echo "发现模块依赖问题："
+				# 提取并禁用冲突的模块
+				echo "正在禁用冲突模块"
+				while read -r module; do
+					# 提取模块名和版本
+					module_name=$(echo $module | grep -oP '(?<=module )[^:]+:[^ ]+' | sed 's/:[^:]*$//')
+					if [ -n "$module_name" ]; then
+						echo "禁用模块: $module_name"
+						sudo yum module disable "$module_name" -y
+						if [ $? -eq 0 ]; then
+							echo "模块 $module_name 禁用成功"
+						else
+							echo "模块 $module_name 禁用失败"
+						fi
+					fi
+				done <<< "$nuoyis_install_check_modules_bug"
+				echo "模块依赖修复和冲突模块禁用完成。"
 			fi
 
-			echo "发现模块依赖问题：" | tee -a $log_file
-
-			# 提取并禁用冲突的模块
-			echo "禁用冲突模块..." | tee -a $log_file
-			while read -r module; do
-				# 提取模块名和版本
-				module_name=$(echo $module | grep -oP '(?<=module )[^:]+:[^ ]+' | sed 's/:[^:]*$//')
-				if [ -n "$module_name" ]; then
-					echo "禁用模块: $module_name" | tee -a $log_file
-					sudo dnf module disable "$module_name" -y || sudo yum module disable "$module_name" -y
-					if [ $? -eq 0 ]; then
-						echo "模块 $module_name 禁用成功" | tee -a $log_file
-					else
-						echo "模块 $module_name 禁用失败" | tee -a $log_file
-					fi
-				fi
-			done
-			echo "模块依赖修复和冲突模块禁用完成。" | tee -a $log_file
-
-			# Chat.openai.com 合作编写内容结束
 			if [ ! -d /etc/yum.repos.d/bak ];then
 				mkdir -p /etc/yum.repos.d/bak
 			fi
