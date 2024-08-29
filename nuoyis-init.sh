@@ -549,6 +549,8 @@ EOF
 		# 	nuoyis_openssl=`whereis openssl | cut -d : -f 2 | awk '{print $1}'`
 		# else
 		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+		rpm -ivh --force --nodeps openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
 		rpm -ivh --force --nodeps openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
 		rm -rf openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
 		install_dir="/nuoyis-server/openssl/3.3.1"
