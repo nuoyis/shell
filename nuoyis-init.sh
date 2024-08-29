@@ -559,7 +559,7 @@ EOF
 		nuoyis_install_manger remove subscription-manager-gnome     
 		nuoyis_install_manger remove subscription-manager-firstboot     
 		nuoyis_install_manger remove subscription-manager
-		nuoyis_install_manger install gcc gcc-c++ zlib-devel libtool autoconf automake perl perl-IPC-Cmd perl-Data-Dumper perl-CPAN yum-versionlock
+		nuoyis_install_manger install gcc gcc-c++ zlib-devel libtool autoconf automake perl perl-IPC-Cmd perl-Data-Dumper perl-CPAN
 		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-3.3.1.tar.gz
 		tar -xzvf openssl-3.3.1.tar.gz openssl-3.3.1/
 		./openssl-3.3.1/config --prefix=${install_dir} shared zlib-dynamic enable-ec_nistp_64_gcc_128 enable-ssl3 enable-ssl3-method enable-mdc2 enable-md2
