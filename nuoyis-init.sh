@@ -548,6 +548,7 @@ EOF
 		# if [ -d `whereis openssl | cut -d : -f 2 | awk '{print $1}'` ];then
 		# 	nuoyis_openssl=`whereis openssl | cut -d : -f 2 | awk '{print $1}'`
 		# else
+		rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
 		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
 		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
 		rpm -ivh --force --nodeps openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
