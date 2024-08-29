@@ -21,6 +21,7 @@ fi
 # 检测包管理器
 if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
     PM="yum"
+	setenforce 0
 elif command -v apt-get > /dev/null 2>&1 && command -v dpkg > /dev/null 2>&1; then
     PM="apt"
 fi
@@ -217,7 +218,7 @@ nuoyis_lnmp_install(){
     else
             # 编译安装
 			echo "创建lnmp基础文件夹"
-			mkdir -p /$auth-server/{openssl,nginx/{webside,server,conf},php,mysql}
+			mkdir -p /$auth-server/{nginx/{webside,server,conf},php,mysql}
             nuoyis_download_manager https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
             tar -xzvf nginx-1.27.0.tar.gz
             cd nginx-1.27.0
@@ -225,17 +226,9 @@ nuoyis_lnmp_install(){
 			if [ $? -eq 1 ];then
             	useradd ${auth}_web -s /sbin/nologin -M
 			fi;
-			if [ -d `whereis openssl | cut -d : -f 2 | awk '{print $1}'` ];then
-				nuoyis_openssl=`whereis openssl | cut -d : -f 2 | awk '{print $1}'`
-			else
-				nuoyis_download_manager https://shell.nuoyis.net/download/openssl-3.3.1.tar.gz
-				tar -xzvf openssl-3.3.1.tar.gz openssl-3.3.1/
-				mv -f ./openssl-3.3.1/* /nuoyis-server/openssl/ &> /dev/null
-				nuoyis_openssl="/nuoyis-server/openssl/"
-				rm -rf ./openssl-3.3.1.tar.gz
-			fi;
 			nuoyis_install_manger install gd-devel.x86_64
-			./configure --prefix=/$auth-server/nginx/server --with-openssl=${nuoyis_openssl} --user=${auth}_web --group=${auth}_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
+			# --with-openssl=${nuoyis_openssl} 
+			./configure --prefix=/$auth-server/nginx/server --user=${auth}_web --group=${auth}_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
 			make && make install
 			mkdir -p /$auth-server/logs/nginx
 			touch /$auth-server/logs/nginx/{error.log,nginx.pid}
@@ -549,6 +542,47 @@ EOF
 		source main.sh
 		echo "yes"
 	fi
+
+	if [ $system_name == "RedHat" ];then
+		echo "正在对RHEL系统进行openssl系统特调"
+		# if [ -d `whereis openssl | cut -d : -f 2 | awk '{print $1}'` ];then
+		# 	nuoyis_openssl=`whereis openssl | cut -d : -f 2 | awk '{print $1}'`
+		# else
+		install_dir="/nuoyis-server/openssl/3.3.1"
+		mkdir -p $install_dir
+		nuoyis_install_manger remove subscription-manager-gnome     
+		nuoyis_install_manger remove subscription-manager-firstboot     
+		nuoyis_install_manger remove subscription-manager
+		nuoyis_install_manger install gcc gcc-c++ zlib-devel libtool autoconf automake perl perl-IPC-Cmd perl-Data-Dumper perl-CPAN yum-versionlock
+		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-3.3.1.tar.gz
+		tar -xzvf openssl-3.3.1.tar.gz openssl-3.3.1/
+		./openssl-3.3.1/config --prefix=${install_dir} shared zlib-dynamic enable-ec_nistp_64_gcc_128 enable-ssl3 enable-ssl3-method enable-mdc2 enable-md2
+		make -j$(nproc) && make install_sw
+		# mv -f ./openssl-3.3.1/* /nuoyis-server/openssl/ &> /dev/null
+		# nuoyis_openssl="/nuoyis-server/openssl/"
+		rm -rf ./openssl-3.3.1
+		rm -rf ./openssl-3.3.1.tar.gz
+		# fi;
+		# rpm -e --nodeps openssl
+		echo "exclude=openssh* openssl openssl-lib" >> /etc/yum.conf
+
+		mv -f /usr/lib64/libcrypto.so.3 /usr/lib64/libcrypto.so.3.old 2> /dev/null
+		mv -f /usr/lib64/libssl.so.3 /usr/lib64/libssl.so.3.old 2> /dev/null
+		mv -f /usr/bin/openssl /usr/lib64/openssl.old
+
+		ln -sf $install_dir/lib64/libcrypto.so.3 /usr/lib64/libcrypto.so.3
+		ln -sf $install_dir/lib64/libssl.so.3 /usr/lib64/libssl.so.3
+		ln -sf $install_dir/bin/openssl /usr/bin/openssl
+
+		
+		echo "export PATH=\$PATH:${install_dir}/bin" >> /etc/profile
+		echo "export LD_LIBRARY_PATH="${install_dir}/lib:\$LD_LIBRARY_PATH"" >> /etc/profile
+		source /etc/profile
+
+		echo "$install_dir/lib" > /etc/ld.so.conf.d/openssl-3.3.1.conf
+		ldconfig
+	fi
+
 	echo "正在更新源"
 	nuoyis_install_manger clean
 	nuoyis_install_manger update
@@ -579,7 +613,7 @@ if [ $whois != "root" ];then
 fi
 
 echo "创建$auth服务初始化内容"
-mkdir -p /$auth-server/{logs,shell}
+mkdir -p /$auth-server/{openssl,logs,shell}
 # for i in 
 # touch /$auth-server/
 
@@ -669,14 +703,6 @@ if [ $PM == "yum" ];then
 		elif [ $system_version -eq 8 ] && [ $system_name == "Centos" ];then
 			echo "等待更新"
 		fi
-	else
-		if [ $system_name == "RedHat" ];then
-			echo "exclude=openssl-libs" >> /etc/yum.conf
-			echo "exclude=openssl-fips-provider" >> /etc/yum.conf
-			nuoyis_install_manger remove subscription-manager-gnome     
-			nuoyis_install_manger remove subscription-manager-firstboot     
-			nuoyis_install_manger remove subscription-manager
-		fi
 	fi
 fi
 
@@ -718,7 +744,7 @@ nuoyis_source_installer
 echo "系统优化类"
 
 echo "配置基础系统文件"
-nuoyis_install_manger install dnf-plugins-core bash* vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple
+nuoyis_install_manger install openssl-devel dnf-plugins-core python3 pip bash* vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple
 
 
 # 来自https://www.rockylinux.cn
