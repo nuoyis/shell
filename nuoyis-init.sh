@@ -199,7 +199,7 @@ nuoyis_lnmp_install(){
 	echo "安装lnmp"
 	echo "正在测试中，请晚些时候再执行"
 	if [ $PM = "yum" ];then
-		nuoyis_install_manger install pcre pcre-devel zlib zlib-devel libxml2 libxml2-devel readline readline-devel ncurses ncerses-devel perl-devel perl-ExtUtils-Embed openssl-devel
+		nuoyis_install_manger install pcre pcre-devel zlib zlib-devel libxml2 libxml2-devel readline readline-devel ncurses ncerses-devel perl-devel perl-ExtUtils-Embed
     else
 		nuoyis_install_manger install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev
 	fi
@@ -548,6 +548,9 @@ EOF
 		# if [ -d `whereis openssl | cut -d : -f 2 | awk '{print $1}'` ];then
 		# 	nuoyis_openssl=`whereis openssl | cut -d : -f 2 | awk '{print $1}'`
 		# else
+		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+		rpm -ivh --force --nodeps openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+		rm -rf openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
 		install_dir="/nuoyis-server/openssl/3.3.1"
 		mkdir -p $install_dir
 		nuoyis_install_manger remove subscription-manager-gnome     
@@ -744,7 +747,7 @@ nuoyis_source_installer
 echo "系统优化类"
 
 echo "配置基础系统文件"
-nuoyis_install_manger install openssl-devel dnf-plugins-core python3 pip bash* vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple
+nuoyis_install_manger install dnf-plugins-core python3 pip bash* vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple
 
 
 # 来自https://www.rockylinux.cn
