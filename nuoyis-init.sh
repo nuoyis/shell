@@ -200,165 +200,169 @@ nuoyis_lnmp_install(){
 	echo "正在测试中，请晚些时候再执行"
 	if [ $PM = "yum" ];then
 		nuoyis_install_manger install pcre pcre-devel zlib zlib-devel libxml2 libxml2-devel readline readline-devel ncurses ncerses-devel perl-devel perl-ExtUtils-Embed
-    else
-		nuoyis_install_manger install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev
+		aboutserver=`systemctl is-active firewalld`
+		if [ $aboutserver == "inactive" ];then
+			nuoyis_systemctl_manger start firewalld
+		fi
+		firewall-cmd --set-default-zone=public
+		firewall-cmd --zone=public --add-service=http --per
+		firewall-cmd --zone=public --add-port=3306/tcp --per
+		firewall-cmd --reload
+		if [ $nuoyis_lnmp_install_yn = "y" ];then
+				# 快速安装
+					yes | dnf module reset php
+					yes | dnf module install php:remi-8.2
+					nuoyis_install_manger install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb*
+					nuoyis_systemctl_manger start nginx
+					nuoyis_systemctl_manger start php-fpm
+					nuoyis_systemctl_manger start mariadb
+		else
+				# 编译安装
+				echo "创建lnmp基础文件夹"
+				mkdir -p /$auth-server/{nginx/{webside,server,conf},php,mysql}
+				nuoyis_download_manager https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
+				tar -xzvf nginx-1.27.0.tar.gz
+				id -u ${auth}_web >/dev/null 2>&1
+				if [ $? -eq 1 ];then
+					useradd ${auth}_web -s /sbin/nologin -M
+				fi;
+				echo "安装依赖项"
+				nuoyis_install_manger install gd gd-devel.x86_64 bzip2 bzip2-devel libcurl libcurl-devel* libjpeg libjpeg-devel libpng libpng-devel freetype freetype-devel gmp gmp-devel readline readline-devel libxslt libxslt-devel net-snmp-devel* libtool sqlite-devel* make expat-devel autoconf automake libxml* sqlite* bzip2-devel libcurl* net*
+				# --with-openssl=${nuoyis_openssl} 
+				./nginx-1.27.0/configure --prefix=/$auth-server/nginx/server --user=${auth}_web --group=${auth}_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
+				make && make install
+				./
+				mkdir -p /$auth-server/logs/nginx
+				touch /$auth-server/logs/nginx/{error.log,nginx.pid}
+				rm -rf ./nginx-1.27.0
+				rm -rf ./nginx.tar.gz
+				cat > /$auth-server/nginx/server/conf/nginx.conf << EOF
+	worker_processes  1;
+
+	error_log  /${auth}-server/logs/nginx/error.log;
+
+	pid        /${auth}-server/logs/nginx/nginx.pid;
+
+
+	events {
+		worker_connections  1024;
+	}
+
+
+	http {
+		include       mime.types;
+		default_type  application/octet-stream;
+
+		#log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+		#                  '\$status \$body_bytes_sent "\$http_referer" '
+		#                  '"\$http_user_agent" "\$http_x_forwarded_for"';
+
+		#access_log  logs/access.log  main;
+
+		sendfile        on;
+		#tcp_nopush     on;
+
+		#keepalive_timeout  0;
+		keepalive_timeout  65;
+		
+		gzip on;
+		include /$auth-server/nginx/conf/*.conf;
+	}
+	EOF
+				cat > /$auth-server/nginx/conf/default.conf << EOF
+	server {
+		listen 80;
+		# listen 443 ssl;
+		server_name localhost;
+
+		#charset koi8-r;
+
+		#access_log  logs/host.access.log  main;
+
+		location / {
+			root   html;
+			index  index.html index.htm;
+		}
+
+		# if ($server_port !~ 443){
+		#     rewrite ^(/.*)$ https://$host$1 permanent;
+		# }
+
+		error_page 404 /404.html;
+
+		# redirect server error pages to the static page /50x.html
+		#
+		error_page   500 502 503 504  /50x.html;
+		location = /50x.html {
+			root  html;
+		}
+
+		# proxy the PHP scripts to Apache listening on 127.0.0.1:80
+		#
+		#location ~ \.php$ {
+		#    proxy_pass   http://127.0.0.1;
+		#}
+
+		# pass the PHP scripts to FastCGI server listening on 127.0.0.1:9000
+		#
+		#location ~ \.php$ {
+		#    root           html;
+		#    fastcgi_pass   127.0.0.1:9000;
+		#    fastcgi_index  index.php;
+		#    fastcgi_param  SCRIPT_FILENAME  /scripts$fastcgi_script_name;
+		#    include        fastcgi_params;
+		#}
+
+		# deny access to .htaccess files, if Apache's document root
+		# concurs with nginx's one
+		#
+		#location ~ /\.ht {
+		#    deny  all;
+		#}
+	}
+
+	EOF
+		# another virtual host using mix of IP-, name-, and port-based configuration
+		#
+		#server {
+		#    listen       8000;
+		#    listen       somename:8080;
+		#    server_name  somename  alias  another.alias;
+
+		#    location / {
+		#        root   html;
+		#        index  index.html index.htm;
+		#    }
+		#}
+
+
+		# HTTPS server
+		#
+		#server {
+		#    listen       443 ssl;
+		#    server_name  localhost;
+
+		#    ssl_certificate      cert.pem;
+		#    ssl_certificate_key  cert.key;
+
+		#    ssl_session_cache    shared:SSL:1m;
+		#    ssl_session_timeout  5m;
+
+		#    ssl_ciphers  HIGH:!aNULL:!MD5;
+		#    ssl_prefer_server_ciphers  on;
+
+		#    location / {
+		#        root   html;
+		#        index  index.html index.htm;
+		#    }
+		#}
+
+				ln -s /$auth-server/nginx/server/sbin/nginx /usr/local/bin/
+				nginx
+    fi
+	else
+		nuoyis_install_manger install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
 	fi
-	if [ $nuoyis_lnmp_install_yn = "y" ];then
-            # 快速安装
-			if [ $PM = "yum" ];then
-				yes | dnf module reset php
-				yes | dnf module install php:remi-8.2
-				nuoyis_install_manger install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb*
-				nuoyis_systemctl_manger start nginx
-				nuoyis_systemctl_manger start php-fpm
-				nuoyis_systemctl_manger start mysqld
-			else
-				nuoyis_install_manger install nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
-			fi
-    else
-            # 编译安装
-			echo "创建lnmp基础文件夹"
-			mkdir -p /$auth-server/{nginx/{webside,server,conf},php,mysql}
-            nuoyis_download_manager https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
-            tar -xzvf nginx-1.27.0.tar.gz
-            cd nginx-1.27.0
-			id -u ${auth}_web >/dev/null 2>&1
-			if [ $? -eq 1 ];then
-            	useradd ${auth}_web -s /sbin/nologin -M
-			fi;
-			nuoyis_install_manger install gd-devel.x86_64
-			# --with-openssl=${nuoyis_openssl} 
-			./configure --prefix=/$auth-server/nginx/server --user=${auth}_web --group=${auth}_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
-			make && make install
-			mkdir -p /$auth-server/logs/nginx
-			touch /$auth-server/logs/nginx/{error.log,nginx.pid}
-			cd ..
-			rm -rf ./nginx-1.27.0
-			rm -rf ./nginx.tar.gz
-			cat > /$auth-server/nginx/server/conf/nginx.conf << EOF
-worker_processes  1;
-
-error_log  /${auth}-server/logs/nginx/error.log;
-
-pid        /${auth}-server/logs/nginx/nginx.pid;
-
-
-events {
-    worker_connections  1024;
-}
-
-
-http {
-    include       mime.types;
-    default_type  application/octet-stream;
-
-    #log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
-    #                  '\$status \$body_bytes_sent "\$http_referer" '
-    #                  '"\$http_user_agent" "\$http_x_forwarded_for"';
-
-    #access_log  logs/access.log  main;
-
-    sendfile        on;
-    #tcp_nopush     on;
-
-    #keepalive_timeout  0;
-    keepalive_timeout  65;
-	
-    gzip on;
-	include /$auth-server/nginx/conf/*.conf;
-}
-EOF
-			cat > /$auth-server/nginx/conf/default.conf << EOF
-server {
-	listen 80;
-	# listen 443 ssl;
-	server_name localhost;
-
-	#charset koi8-r;
-
-	#access_log  logs/host.access.log  main;
-
-	location / {
-		root   html;
-		index  index.html index.htm;
-	}
-
-	# if ($server_port !~ 443){
-    #     rewrite ^(/.*)$ https://$host$1 permanent;
-    # }
-
-	error_page 404 /404.html;
-
-	# redirect server error pages to the static page /50x.html
-	#
-	error_page   500 502 503 504  /50x.html;
-	location = /50x.html {
-		root  html;
-	}
-
-	# proxy the PHP scripts to Apache listening on 127.0.0.1:80
-	#
-	#location ~ \.php$ {
-	#    proxy_pass   http://127.0.0.1;
-	#}
-
-	# pass the PHP scripts to FastCGI server listening on 127.0.0.1:9000
-	#
-	#location ~ \.php$ {
-	#    root           html;
-	#    fastcgi_pass   127.0.0.1:9000;
-	#    fastcgi_index  index.php;
-	#    fastcgi_param  SCRIPT_FILENAME  /scripts$fastcgi_script_name;
-	#    include        fastcgi_params;
-	#}
-
-	# deny access to .htaccess files, if Apache's document root
-	# concurs with nginx's one
-	#
-	#location ~ /\.ht {
-	#    deny  all;
-	#}
-}
-
-EOF
-    # another virtual host using mix of IP-, name-, and port-based configuration
-    #
-    #server {
-    #    listen       8000;
-    #    listen       somename:8080;
-    #    server_name  somename  alias  another.alias;
-
-    #    location / {
-    #        root   html;
-    #        index  index.html index.htm;
-    #    }
-    #}
-
-
-    # HTTPS server
-    #
-    #server {
-    #    listen       443 ssl;
-    #    server_name  localhost;
-
-    #    ssl_certificate      cert.pem;
-    #    ssl_certificate_key  cert.key;
-
-    #    ssl_session_cache    shared:SSL:1m;
-    #    ssl_session_timeout  5m;
-
-    #    ssl_ciphers  HIGH:!aNULL:!MD5;
-    #    ssl_prefer_server_ciphers  on;
-
-    #    location / {
-    #        root   html;
-    #        index  index.html index.htm;
-    #    }
-    #}
-
-			ln -s /$auth-server/nginx/server/sbin/nginx /usr/local/bin/
-			nginx
-    fi	
 }
 
 # docker安装类
@@ -587,6 +591,7 @@ EOF
 
 		echo "$install_dir/lib" > /etc/ld.so.conf.d/openssl-3.3.1.conf
 		ldconfig
+		dnf config-manager --set-enabled crb -y
 	fi
 
 	echo "正在更新源"
