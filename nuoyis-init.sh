@@ -14,8 +14,7 @@ whois=$(whoami)
 nuo_setnetwork_shell=$(ifconfig -a | grep -o '^\w*' | grep -v 'lo')
 if [ -f "/etc/redhat-release" ];then
 	system_name=`cat /etc/redhat-release | awk '{print $1$2}'`
-	system_version=`cat /etc/redhat-release | egrep -o "[0-9].[0-9]"`
-	system_version=${system_version%.*}
+	system_version=`cat /etc/redhat-release | egrep -o "[0-9]"`
 fi
 
 # 检测包管理器
