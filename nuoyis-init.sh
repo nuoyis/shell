@@ -11,7 +11,8 @@ auth-init-shell="init.nuoyis.net"
 
 #自动获取变量区域
 whois=$(whoami)
-nuo_setnetwork_shell=$(ifconfig -a | grep -o '^\w*' | grep -v 'lo')
+# nuo_setnetwork_shell=$(ifconfig -a | grep -o '^\w*' | grep -v 'lo')
+nuo_setnetwork_shell=$(ip a | grep -oE "inet ([0-9]{1,3}.){3}[0-9]{1,3}" | awk 'NR==2 {print $2}')
 if [ -f "/etc/redhat-release" ];then
 	system_name=`head -n 1 /etc/os-release | grep -oP '(?<=NAME=").*(?=")' | awk '{print$1}'`
 	system_version=`cat /etc/os-release | grep -oP '(?<=VERSION_ID=").*(?=")'`
