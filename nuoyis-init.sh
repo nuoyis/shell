@@ -13,8 +13,9 @@ auth-init-shell="init.nuoyis.net"
 whois=$(whoami)
 nuo_setnetwork_shell=$(ifconfig -a | grep -o '^\w*' | grep -v 'lo')
 if [ -f "/etc/redhat-release" ];then
-	system_name=`cat /etc/redhat-release | awk '{print $1$2}'`
-	system_version=`cat /etc/redhat-release | egrep -o "[0-9]"`
+	system_name=`head -n 1 /etc/os-release | grep -oP '(?<=NAME=").*(?=")' | awk '{print$1}'`
+	system_version=`cat /etc/os-release | grep -oP '(?<=VERSION_ID=").*(?=")'`
+	system_version=${system_version%.*}
 fi
 
 # 检测包管理器
@@ -208,34 +209,33 @@ nuoyis_lnmp_install(){
 		firewall-cmd --zone=public --add-port=3306/tcp --per
 		firewall-cmd --reload
 		if [ $nuoyis_lnmp_install_yn = "y" ];then
-				# 快速安装
-					yes | dnf module reset php
-					yes | dnf module install php:remi-8.2
-					nuoyis_install_manger install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb*
-					nuoyis_systemctl_manger start nginx
-					nuoyis_systemctl_manger start php-fpm
-					nuoyis_systemctl_manger start mariadb
+			# 快速安装
+			yes | dnf module reset php
+			yes | dnf module install php:remi-8.2
+			nuoyis_install_manger install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb*
+			nuoyis_systemctl_manger start nginx
+			nuoyis_systemctl_manger start php-fpm
+			nuoyis_systemctl_manger start mariadb
 		else
-				# 编译安装
-				echo "创建lnmp基础文件夹"
-				mkdir -p /$auth-server/{nginx/{webside,server,conf},php,mysql}
-				nuoyis_download_manager https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
-				tar -xzvf nginx-1.27.0.tar.gz
-				id -u ${auth}_web >/dev/null 2>&1
-				if [ $? -eq 1 ];then
-					useradd ${auth}_web -s /sbin/nologin -M
-				fi;
-				echo "安装依赖项"
-				nuoyis_install_manger install gd gd-devel.x86_64 bzip2 bzip2-devel libcurl libcurl-devel* libjpeg libjpeg-devel libpng libpng-devel freetype freetype-devel gmp gmp-devel readline readline-devel libxslt libxslt-devel net-snmp-devel* libtool sqlite-devel* make expat-devel autoconf automake libxml* sqlite* bzip2-devel libcurl* net*
-				# --with-openssl=${nuoyis_openssl} 
-				./nginx-1.27.0/configure --prefix=/$auth-server/nginx/server --user=${auth}_web --group=${auth}_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
-				make && make install
-				./
-				mkdir -p /$auth-server/logs/nginx
-				touch /$auth-server/logs/nginx/{error.log,nginx.pid}
-				rm -rf ./nginx-1.27.0
-				rm -rf ./nginx.tar.gz
-				cat > /$auth-server/nginx/server/conf/nginx.conf << EOF
+			# 编译安装
+			echo "创建lnmp基础文件夹"
+			mkdir -p /$auth-server/{nginx/{webside,server,conf},php,mysql}
+			nuoyis_download_manager https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
+			tar -xzvf nginx-1.27.0.tar.gz
+			id -u ${auth}_web >/dev/null 2>&1
+			if [ $? -eq 1 ];then
+				useradd ${auth}_web -s /sbin/nologin -M
+			fi;
+			echo "安装依赖项"
+			nuoyis_install_manger install gd gd-devel.x86_64 bzip2 bzip2-devel libcurl libcurl-devel* libjpeg libjpeg-devel libpng libpng-devel freetype freetype-devel gmp gmp-devel readline readline-devel libxslt libxslt-devel net-snmp-devel* libtool sqlite-devel* make expat-devel autoconf automake libxml* sqlite* bzip2-devel libcurl* net*
+			# --with-openssl=${nuoyis_openssl} 
+			./nginx-1.27.0/configure --prefix=/$auth-server/nginx/server --user=${auth}_web --group=${auth}_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
+			make -j$(nproc)&& make install
+			mkdir -p /$auth-server/logs/nginx
+			touch /$auth-server/logs/nginx/{error.log,nginx.pid}
+			rm -rf ./nginx-1.27.0
+			rm -rf ./nginx.tar.gz
+			cat > /$auth-server/nginx/server/conf/nginx.conf << EOF
 	worker_processes  1;
 
 	error_log  /${auth}-server/logs/nginx/error.log;
@@ -267,8 +267,10 @@ nuoyis_lnmp_install(){
 		gzip on;
 		include /$auth-server/nginx/conf/*.conf;
 	}
-	EOF
-				cat > /$auth-server/nginx/conf/default.conf << EOF
+EOF
+	
+	
+	cat > /$auth-server/nginx/conf/default.conf << EOF
 	server {
 		listen 80;
 		# listen 443 ssl;
@@ -319,8 +321,7 @@ nuoyis_lnmp_install(){
 		#    deny  all;
 		#}
 	}
-
-	EOF
+EOF
 		# another virtual host using mix of IP-, name-, and port-based configuration
 		#
 		#server {
@@ -358,7 +359,7 @@ nuoyis_lnmp_install(){
 
 				ln -s /$auth-server/nginx/server/sbin/nginx /usr/local/bin/
 				nginx
-    fi
+    	fi
 	else
 		nuoyis_install_manger install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
 	fi
@@ -369,9 +370,9 @@ nuoyis_docker_install(){
 	echo "安装Docker"
 	if [ $PM = "yum" ];then
 	nuoyis_install_manger install yum-utils device-mapper-persistent-data lvm2
-	nuoyis_install_manger repoadd https://chinanet.mirrors.ustc.edu.cn/docker-ce/linux/centos/docker-ce.repo
+	nuoyis_install_manger repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 	fi
-	sed -i 's+download.docker.com+chinanet.mirrors.ustc.edu.cn/docker-ce+' /etc/yum.repos.d/docker-ce.repo
+	sed -i 's+download.docker.com+mirrors.aliyun.com/docker-ce+' /etc/yum.repos.d/docker-ce.repo
 	nuoyis_install_manger makecache
 	nuoyis_install_manger install docker-ce
 	mkdir -p /etc/docker
@@ -434,54 +435,54 @@ nuoyis_source_installer(){
 			cat > /etc/yum.repos.d/$auth.repo << EOF
 [${auth}-BaseOS]
 name=${auth} - BaseOS
-baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/BaseOS/\$basearch/os/
+baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/BaseOS/\$basearch/os/
 gpgcheck=0
 
 [${auth}-baseos-debuginfo]
 name=${auth} - BaseOS - Debug
 #mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=\$basearch&repo=BaseOS-\$releasever-debug\$rltype
-baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/BaseOS/\$basearch/debug/tree/
+baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/BaseOS/\$basearch/debug/tree/
 gpgcheck=0
 
 [${auth}-baseos-source]
 name=${auth} - BaseOS - Source
 #mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=source&repo=BaseOS-\$releasever-source\$rltype
-baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/BaseOS/source/tree/
+baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/BaseOS/source/tree/
 gpgcheck=0
 
 [${auth}-appstream]
 name=${auth} - AppStream
 #mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=\$basearch&repo=AppStream-\$releasever\$rltype
-baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/AppStream/\$basearch/os/
+baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/AppStream/\$basearch/os/
 gpgcheck=0
 
 [${auth}-appstream-debuginfo]
 name=${auth} - AppStream - Debug
 #mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=\$basearch&repo=AppStream-\$releasever-debug\$rltype
-baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/AppStream/\$basearch/debug/tree/
+baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/AppStream/\$basearch/debug/tree/
 gpgcheck=0
 
 [${auth}-appstream-source]
 name=${auth} - AppStream - Source
 #mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=source&repo=AppStream-\$releasever-source\$rltype
-baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/AppStream/source/tree/
+baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/AppStream/source/tree/
 gpgcheck=0
 
 [${auth}-crb]
 name=${auth} - CRB
 #mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=\$basearch&repo=CRB-\$releasever\$rltype
-baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/CRB/\$basearch/os/
+baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/CRB/\$basearch/os/
 gpgcheck=0
 
 [${auth}-crb-debuginfo]
 name=${auth} - CRB - Debug
 #mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=\$basearch&repo=CRB-\$releasever-debug\$rltype
-baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/CRB/\$basearch/debug/tree/
+baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/CRB/\$basearch/debug/tree/
 gpgcheck=0
 
 [${auth}-crb-source]
 name=${auth} - CRB - Source
-baseurl=https://chinanet.mirrors.ustc.edu.cn/rocky/\$releasever/CRB/source/tree/
+baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/CRB/source/tree/
 gpgcheck=0
 EOF
 
@@ -528,12 +529,11 @@ EOF
 	fi
 
 	rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
-	rpm --import https://mirrors.bfsu.edu.cn/epel/RPM-GPG-KEY-EPEL-9
-	nuoyis_install_manger install https://mirrors.bfsu.edu.cn/epel/epel-release-latest-9.noarch.rpm https://mirrors.bfsu.edu.cn/epel/epel-next-release-latest-9.noarch.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm
+	nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm
 	sudo sed -e 's!^metalink=!#metalink=!g' \
     -e 's!^#baseurl=!baseurl=!g' \
-    -e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.cernet.edu.cn/epel!g' \
-    -e 's!https\?://download\.example/pub/epel!https://mirrors.cernet.edu.cn/epel!g' \
+    -e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
+    -e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
     -i /etc/yum.repos.d/epel{,-testing}.repo
 	sed -i 's/mirrorlist=/#mirrorlist=/g' /etc/yum.repos.d/elrepo.repo
 	sed -i 's#elrepo.org/linux#mirrors.cernet.edu.cn/elrepo#g' /etc/yum.repos.d/elrepo.repo
@@ -546,7 +546,7 @@ EOF
 		echo "yes"
 	fi
 
-	if [ $system_name == "RedHat" ];then
+	if [ $system_name == "Red" ];then
 		echo "正在对RHEL系统进行openssl系统特调"
 		# if [ -d `whereis openssl | cut -d : -f 2 | awk '{print $1}'` ];then
 		# 	nuoyis_openssl=`whereis openssl | cut -d : -f 2 | awk '{print $1}'`
@@ -638,7 +638,7 @@ echo "正在检查支持版本"
 if [ $PM == "yum" ];then
 	if [ $system_version -lt 9 ];then
 		echo "不受支持版本,正在检测你的系统"
-		if [ $system_version -eq 8 ] && [ $system_name == "RockyLinux" ];then
+		if [ $system_version -eq 8 ] && [ $system_name == "Rocky" ];then
 			read -p "是否进行版本更新，反之退出脚本(y/n):" nuoyis_update
 			if [ $nuoyis_update == "n" ];then
         		echo "正在退出脚本"
@@ -712,6 +712,9 @@ if [ $PM == "yum" ];then
 			echo "等待更新"
 		elif [ $system_version -eq 8 ] && [ $system_name == "Centos" ];then
 			echo "等待更新"
+		else
+			echo "不受脚本支持的系统，请更换后再试"
+			exit 1
 		fi
 	fi
 fi
