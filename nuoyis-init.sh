@@ -7,7 +7,6 @@ auth="nuoyis"
 CIDR="10.104.43"
 gateway="10.104.0.1"
 dns="223.5.5.5"
-auth-init-shell="init.nuoyis.net"
 
 #自动获取变量区域
 whois=$(whoami)
@@ -22,6 +21,13 @@ fi
 # 检测包管理器
 if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
     PM="yum"
+	case $system_name in
+		"CentOS")
+		osname="centos-stream/\$releasever-stream"
+		;;
+		*)
+		osname="rockylinux/\$releasever"
+	esac
 	setenforce 0
 elif command -v apt-get > /dev/null 2>&1 && command -v dpkg > /dev/null 2>&1; then
     PM="apt"
@@ -221,27 +227,30 @@ nuoyis_lnmp_install(){
 			# 编译安装
 			echo "创建lnmp基础文件夹"
 			mkdir -p /$auth-server/{nginx/{webside,server,conf},php,mysql}
-			nuoyis_download_manager https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
-			tar -xzvf nginx-1.27.0.tar.gz
-			id -u ${auth}_web >/dev/null 2>&1
+
+			id -u nuoyis_web >/dev/null 2>&1
 			if [ $? -eq 1 ];then
-				useradd ${auth}_web -s /sbin/nologin -M
+				useradd nuoyis_web -s /sbin/nologin -M
 			fi;
 			echo "安装依赖项"
 			nuoyis_install_manger install gd gd-devel.x86_64 bzip2 bzip2-devel libcurl libcurl-devel* libjpeg libjpeg-devel libpng libpng-devel freetype freetype-devel gmp gmp-devel readline readline-devel libxslt libxslt-devel net-snmp-devel* libtool sqlite-devel* make expat-devel autoconf automake libxml* sqlite* bzip2-devel libcurl* net*
-			# --with-openssl=${nuoyis_openssl} 
-			./nginx-1.27.0/configure --prefix=/$auth-server/nginx/server --user=${auth}_web --group=${auth}_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
+			# --with-openssl=${nuoyis_openssl}
+			nuoyis_download_manager https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
+			tar -xzvf nginx-1.27.0.tar.gz
+			cd nginx-1.27.0
+			./configure --prefix=/$auth-server/nginx/server --user=nuoyis_web --group=nuoyis_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
 			make -j$(nproc)&& make install
+			cd ..
 			mkdir -p /$auth-server/logs/nginx
 			touch /$auth-server/logs/nginx/{error.log,nginx.pid}
 			rm -rf ./nginx-1.27.0
-			rm -rf ./nginx.tar.gz
+			rm -rf ./nginx-1.27.0.tar.gz
 			cat > /$auth-server/nginx/server/conf/nginx.conf << EOF
 	worker_processes  1;
 
-	error_log  /${auth}-server/logs/nginx/error.log;
+	error_log  /nuoyis-server/logs/nginx/error.log;
 
-	pid        /${auth}-server/logs/nginx/nginx.pid;
+	pid        /nuoyis-server/logs/nginx/nginx.pid;
 
 
 	events {
@@ -433,83 +442,80 @@ nuoyis_source_installer(){
 			fi
 			mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
 			mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
+
 			cat > /etc/yum.repos.d/$auth.repo << EOF
 [${auth}-BaseOS]
 name=${auth} - BaseOS
-baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/BaseOS/\$basearch/os/
+baseurl=https://mirrors.aliyun.com/${osname}/BaseOS/\$basearch/os/
 gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
 
 [${auth}-baseos-debuginfo]
 name=${auth} - BaseOS - Debug
-#mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=\$basearch&repo=BaseOS-\$releasever-debug\$rltype
-baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/BaseOS/\$basearch/debug/tree/
+baseurl=https://mirrors.aliyun.com/${osname}/BaseOS/\$basearch/debug/tree/
 gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
 
 [${auth}-baseos-source]
 name=${auth} - BaseOS - Source
-#mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=source&repo=BaseOS-\$releasever-source\$rltype
-baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/BaseOS/source/tree/
+baseurl=https://mirrors.aliyun.com/${osname}/BaseOS/source/tree/
 gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
 
 [${auth}-appstream]
 name=${auth} - AppStream
-#mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=\$basearch&repo=AppStream-\$releasever\$rltype
-baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/AppStream/\$basearch/os/
+baseurl=https://mirrors.aliyun.com/${osname}/AppStream/\$basearch/os/
 gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
 
 [${auth}-appstream-debuginfo]
 name=${auth} - AppStream - Debug
-#mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=\$basearch&repo=AppStream-\$releasever-debug\$rltype
-baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/AppStream/\$basearch/debug/tree/
+baseurl=https://mirrors.aliyun.com/${osname}/AppStream/\$basearch/debug/tree/
 gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
 
 [${auth}-appstream-source]
 name=${auth} - AppStream - Source
-#mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=source&repo=AppStream-\$releasever-source\$rltype
-baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/AppStream/source/tree/
+baseurl=https://mirrors.aliyun.com/${osname}/AppStream/source/tree/
 gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
 
 [${auth}-crb]
 name=${auth} - CRB
-#mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=\$basearch&repo=CRB-\$releasever\$rltype
-baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/CRB/\$basearch/os/
+baseurl=https://mirrors.aliyun.com/${osname}/CRB/\$basearch/os/
 gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
 
 [${auth}-crb-debuginfo]
 name=${auth} - CRB - Debug
-#mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=\$basearch&repo=CRB-\$releasever-debug\$rltype
-baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/CRB/\$basearch/debug/tree/
+baseurl=https://mirrors.aliyun.com/${osname}/CRB/\$basearch/debug/tree/
 gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
 
 [${auth}-crb-source]
 name=${auth} - CRB - Source
-baseurl=https://mirrors.aliyun.com/rockylinux/\$releasever/CRB/source/tree/
+baseurl=https://mirrors.aliyun.com/${osname}/CRB/source/tree/
 gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
 EOF
-
-# [${auth}-epel]
-# name=${auth} - epel
-# # It is much more secure to use the metalink, but if you wish to use a local mirror
-# # place its address here.
-# baseurl=https://chinanet.mirrors.ustc.edu.cn/epel/\$releasever/Everything/\$basearch/
-# #metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
-# gpgcheck=0
-
-# [${auth}-epel-debuginfo]
-# name=${auth} - epel - Debug
-# # It is much more secure to use the metalink, but if you wish to use a local mirror
-# # place its address here.
-# baseurl=https://chinanet.mirrors.ustc.edu.cn/epel/\$releasever/Everything/\$basearch/debug/
-# #metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-debug-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
-# gpgcheck=0
-
-# [${auth}-epel-source]
-# name=${auth} - epel - Source
-# baseurl=https://chinanet.mirrors.ustc.edu.cn/epel/\$releasever/Everything/source/tree/
-# #metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-source-\$releasever&arch=\$basearch&infra=\$infra&content=\$contentdir
-# gpgcheck=0
-
-
 	echo "skip_broken=True" >> /etc/yum.conf
 	echo "skip_broken=True" >> /etc/dnf/dnf.conf
 
@@ -537,6 +543,10 @@ EOF
     -e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
     -i /etc/yum.repos.d/epel{,-testing}.repo
 	sed -i 's/mirrorlist=/#mirrorlist=/g' /etc/yum.repos.d/elrepo.repo
+	sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+    -e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+    -e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+    -i  /etc/yum.repos.d/remi*
 	sed -i 's#elrepo.org/linux#mirrors.cernet.edu.cn/elrepo#g' /etc/yum.repos.d/elrepo.repo
 	nuoyis_install_manger install https://shell.nuoyis.net/download/remi-release-9.rpm
 	else
@@ -549,49 +559,56 @@ EOF
 
 	if [ $system_name == "Red" ];then
 		echo "正在对RHEL系统进行openssl系统特调"
-		# if [ -d `whereis openssl | cut -d : -f 2 | awk '{print $1}'` ];then
-		# 	nuoyis_openssl=`whereis openssl | cut -d : -f 2 | awk '{print $1}'`
-		# else
-		rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
-		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
-		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		rpm -ivh --force --nodeps openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		rpm -ivh --force --nodeps openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
-		rm -rf openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
-		install_dir="/nuoyis-server/openssl/3.3.1"
-		mkdir -p $install_dir
 		nuoyis_install_manger remove subscription-manager-gnome     
 		nuoyis_install_manger remove subscription-manager-firstboot     
 		nuoyis_install_manger remove subscription-manager
-		nuoyis_install_manger install gcc gcc-c++ zlib-devel libtool autoconf automake perl perl-IPC-Cmd perl-Data-Dumper perl-CPAN
-		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-3.3.1.tar.gz
-		tar -xzvf openssl-3.3.1.tar.gz openssl-3.3.1/
-		./openssl-3.3.1/config --prefix=${install_dir} shared zlib-dynamic enable-ec_nistp_64_gcc_128 enable-ssl3 enable-ssl3-method enable-mdc2 enable-md2
-		make -j$(nproc) && make install_sw
-		# mv -f ./openssl-3.3.1/* /nuoyis-server/openssl/ &> /dev/null
-		# nuoyis_openssl="/nuoyis-server/openssl/"
-		rm -rf ./openssl-3.3.1
-		rm -rf ./openssl-3.3.1.tar.gz
-		# fi;
-		# rpm -e --nodeps openssl
-		echo "exclude=openssh* openssl openssl-lib" >> /etc/yum.conf
-
-		mv -f /usr/lib64/libcrypto.so.3 /usr/lib64/libcrypto.so.3.old 2> /dev/null
-		mv -f /usr/lib64/libssl.so.3 /usr/lib64/libssl.so.3.old 2> /dev/null
-		mv -f /usr/bin/openssl /usr/lib64/openssl.old
-
-		ln -sf $install_dir/lib64/libcrypto.so.3 /usr/lib64/libcrypto.so.3
-		ln -sf $install_dir/lib64/libssl.so.3 /usr/lib64/libssl.so.3
-		ln -sf $install_dir/bin/openssl /usr/bin/openssl
+		rpm -e --nodeps openssl-fips-provider
+		rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
+		nuoyis_install_manger install https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
 
 		
-		echo "export PATH=\$PATH:${install_dir}/bin" >> /etc/profile
-		echo "export LD_LIBRARY_PATH="${install_dir}/lib:\$LD_LIBRARY_PATH"" >> /etc/profile
-		source /etc/profile
+		# # if [ -d `whereis openssl | cut -d : -f 2 | awk '{print $1}'` ];then
+		# # 	nuoyis_openssl=`whereis openssl | cut -d : -f 2 | awk '{print $1}'`
+		# # fi
+		# rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
+		# nuoyis_download_manager https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+		# nuoyis_download_manager https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+		# rpm -ivh --force --nodeps openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+		# rpm -ivh --force --nodeps openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+		# rm -rf openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+		# install_dir="/nuoyis-server/openssl/3.3.1"
+		# mkdir -p $install_dir
+		# nuoyis_install_manger install gcc gcc-c++ zlib-devel libtool autoconf automake perl perl-IPC-Cmd perl-Data-Dumper perl-CPAN
+		# nuoyis_download_manager https://shell.nuoyis.net/download/openssl-3.3.1.tar.gz
+		# tar -xzvf openssl-3.3.1.tar.gz openssl-3.3.1/
+		# ./openssl-3.3.1/config --prefix=${install_dir} shared zlib-dynamic enable-ec_nistp_64_gcc_128 enable-ssl3 enable-ssl3-method enable-mdc2 enable-md2
+		# make -j$(nproc) && make install_sw
+		# # mv -f ./openssl-3.3.1/* /nuoyis-server/openssl/ &> /dev/null
+		# # nuoyis_openssl="/nuoyis-server/openssl/"
+		# rm -rf ./openssl-3.3.1
+		# rm -rf ./openssl-3.3.1.tar.gz
+		# # fi;
+		# # rpm -e --nodeps openssl
+		# echo "exclude=openssh* openssl openssl-lib" >> /etc/yum.conf
 
-		echo "$install_dir/lib" > /etc/ld.so.conf.d/openssl-3.3.1.conf
-		ldconfig
-		dnf config-manager --set-enabled crb -y
+		# ln -sf $install_dir/lib64/libcrypto.so.3 /usr/lib64/libcrypto.so.3
+		# ln -sf $install_dir/lib64/libssl.so.3 /usr/lib64/libssl.so.3
+
+		# ldd ${install_dir}/bin/openssl
+
+		# mv -f /usr/bin/openssl /usr/lib64/openssl.old
+		# mv -f 
+
+		# ln -sf $install_dir/bin/openssl /usr/bin/openssl
+		# ln -sf $install_dir/include/openssl /usr/include/openssl
+		
+		# echo "export PATH=\$PATH:${install_dir}/bin" >> /etc/profile
+		# echo "export LD_LIBRARY_PATH="${install_dir}/lib:\$LD_LIBRARY_PATH"" >> /etc/profile
+		# source /etc/profile
+
+		# echo "$install_dir/lib" > /etc/ld.so.conf.d/openssl-3.3.1.conf
+		# ldconfig
+		# dnf config-manager --set-enabled crb -y
 	fi
 
 	echo "正在更新源"
@@ -656,13 +673,13 @@ if [ $PM == "yum" ];then
 					nuoyis_source_installer
 					# https://www.rockylinux.cn/notes/strong-rocky-linux-8-sheng-ji-zhi-rocky-linux-9-strong.html
 					# 安装 epel 源
-					dnf -y install epel-release
+					nuoyis_install_manger epel-release
 					
 					# 更新系统至最新版
-					dnf -y update
+					nuoyis_install_manger update
 
 					# 安装 rpmconf 和 yum-utils
-					dnf -y install rpmconf yum-utils
+					nuoyis_install_manger rpmconf yum-utils
 					
 					# 执行 rpmconf，如果出现提示信息，请输入 Y 和回车继续，如果没提示继续。
 					yes | rpmconf -a
@@ -679,21 +696,21 @@ if [ $PM == "yum" ];then
 					# 升级 Rocky Linux 9
 					rpm -e --nodeps rocky-logos-86.2-1.el8.x86_64
 					dnf clean all
-					dnf -y --releasever=9 --allowerasing --setopt=deltarpm=false distro-sync
+					yes | dnf --releasever=9 --allowerasing --setopt=deltarpm=false distro-sync
 										
 					# 重建 rpm 数据库，出现警告忽略。
 					yes | rpm --rebuilddb
 					
 					# 安装新内核
-					dnf -y install kernel
-					dnf -y install kernel-core
-					dnf -y install shim
+					nuoyis_install_manger install kernel
+					nuoyis_install_manger install kernel-core
+					nuoyis_install_manger install shim
 					
 					# 安装基础环境
-					dnf group install minimal-environment -y
+					nuoyis_install_manger installfull group minimal-environment
 					
 					# 安装 rpmconf 和 yum-utils
-					dnf -y install rpmconf yum-utils
+					nuoyis_install_manger install rpmconf yum-utils
 					
 					# 执行 rpmconf，根据提示一直输入 Y 和回车即可
 					rpmconf -a
@@ -703,7 +720,7 @@ if [ $PM == "yum" ];then
 					grub2-mkconfig -o $grubcfg/grub.cfg
 					
 					# 更新系统
-					dnf -y update
+					nuoyis_install_manger update
 					
 					# 重启系统
 					reboot
