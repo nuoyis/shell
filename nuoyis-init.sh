@@ -567,7 +567,18 @@ EOF
 		rpm -e --nodeps openssl-fips-provider
 		rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
 		nuoyis_install_manger install https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-
+		if [ -d /sys/firmware/efi ] && [ -d /boot/efi/EFI/redhat ];then
+			echo "你的Boot分区为EFI，正在进行特别优化"
+			mv /boot/efi/EFI/redhat/ /boot/efi/EFI/rocky
+			bootid=$(efibootmgr | grep BootCurrent | egrep -o "[0-9]+")
+			efi_uuid=$(efibootmgr -v | grep -A 1 "Boot"$bootid  | egrep -o '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+			efi_id=$(lsblk -o NAME,UUID,PARTUUID | grep $efi_uuid |  egrep -o '[n|v][[:alnum:]]+')
+			diskname=$(echo $efi_id | sed 's/[0-9]*$//; s/p[0-9]*$//')
+			efi_disknumber=$(echo $efi_id | egrep -o '[0-9]$')
+			sudo efibootmgr -b $bootid -B
+			sudo efibootmgr --create --disk "/dev/$diskname" --part $efi_disknumber --label "nuoyis-redhat Linux" --loader "\EFI\rocky\shimx64.efi"
+			sudo grub2-mkconfig -o /boot/efi/EFI/rocky/grub.cfg
+		fi
 		
 		# # if [ -d `whereis openssl | cut -d : -f 2 | awk '{print $1}'` ];then
 		# # 	nuoyis_openssl=`whereis openssl | cut -d : -f 2 | awk '{print $1}'`
@@ -777,7 +788,7 @@ nuoyis_source_installer
 echo "系统优化类"
 
 echo "配置基础系统文件"
-nuoyis_install_manger install dnf-plugins-core python3 pip bash* vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple
+nuoyis_install_manger install dnf-plugins-core python3 pip bash* vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils
 
 
 # 来自https://www.rockylinux.cn
@@ -795,8 +806,7 @@ fi
 nuoyis_systemctl_manger start tuned.service
 tuned-adm profile `tuned-adm recommend`
 cat > /etc/sysctl.conf << EOF
-$(egrep -v '^net.core.default_qdisc|^net.ipv4.tcp_congestion_co
-ntrol' /etc/sysctl.conf)
+$(egrep -v '^net.core.default_qdisc|^net.ipv4.tcp_congestion_control' /etc/sysctl.conf)
 EOF
 cat >> /etc/sysctl.conf << EOF
 net.core.default_qdisc=fq
@@ -847,8 +857,8 @@ endTime=`date +%Y%m%d-%H:%M:%S`
 endTime_s=`date +%s`
  
 sumTime=$[ $endTime_s - $startTime_s ]
- 
+
+# 时间统计作者链接：https://blog.csdn.net/bandaoyu/article/details/115525067
 echo "执行完毕，执行时长:$sumTime seconds"                 
-# 原文链接：https://blog.csdn.net/bandaoyu/article/details/115525067
 
 echo "安装完毕，向前出发吧"
