@@ -9,6 +9,8 @@ gateway="10.104.0.1"
 dns="223.5.5.5"
 
 #自动获取变量区域
+startTime=`date +%Y%m%d-%H:%M:%S`
+startTime_s=`date +%s`
 whois=$(whoami)
 # nuo_setnetwork_shell=$(ifconfig -a | grep -o '^\w*' | grep -v 'lo')
 nuo_setnetwork_shell=$(ip a | grep -oE "inet ([0-9]{1,3}.){3}[0-9]{1,3}" | awk 'NR==2 {print $2}')
@@ -536,7 +538,7 @@ EOF
 	fi
 
 	rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
-	nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm
+	nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm
 	sudo sed -e 's!^metalink=!#metalink=!g' \
     -e 's!^#baseurl=!baseurl=!g' \
     -e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
@@ -622,8 +624,8 @@ EOF
 # 脚本run --> 起始点
 
 echo -e "=================================================================="
-echo -e "     诺依阁服务器初始化脚本V2.1"
-echo -e "     更新时间:2024.08.16"
+echo -e "     诺依阁服务器初始化脚本V2.8"
+echo -e "     更新时间:2024.09.02"
 echo -e "     博客地址:https://blog.nuoyis.net"
 echo -e "     \e[31m\e[1m注意1:执行本脚本即同意作者方不承担执行脚本的后果 \e[0m"
 echo -e "     \e[31m\e[1m注意2:当前脚本pid为$$,如果卡死请执行kill -9 $$ \e[0m"
@@ -839,5 +841,14 @@ fi
 #sudo firewall-cmd --reload
 
 rm -rf ./nuoyis-init.sh
+
+
+endTime=`date +%Y%m%d-%H:%M:%S`
+endTime_s=`date +%s`
+ 
+sumTime=$[ $endTime_s - $startTime_s ]
+ 
+echo "执行完毕，执行时长:$sumTime seconds"                 
+# 原文链接：https://blog.csdn.net/bandaoyu/article/details/115525067
 
 echo "安装完毕，向前出发吧"
