@@ -51,7 +51,10 @@ nuoyis_systemctl_manger(){
 	if [ -n $1 ] && [ -n $2 ];then
 		case $1 in
 			"start")
-				systemctl enable --now $2
+			for nuoyis_start in ${@:2}
+			do
+				systemctl enable --now $nuoyis_start
+			done
 				;;
 			"stop")
 				systemctl stop $2
@@ -203,6 +206,160 @@ EOF
 	rm -rf ./install_panel.sh
 }
 
+# nas配置类
+nuoyis_nas_install(){
+mkdir -p /nuoyis-server/sharefile
+chown -R root:ftp /nuoyis-server/sharefile
+chmod -R 775 /nuoyis-server/sharefile
+# 额外配置
+nuoyis_install_manger install vsftpd samba*
+
+firewall-cmd --per --add-service=smb
+firewall-cmd --per --add-service=ftp
+firewall-cmd --reload
+
+cat > /etc/vsftpd/vsftpd.conf << EOF
+# 不以独立模式运行
+listen=NO
+# 支持 IPV6，如不开启 IPV4 也无法登录
+listen_ipv6=YES
+
+# 匿名用户登录
+anonymous_enable=YES
+no_anon_password=YES
+# 允许匿名用户上传文件
+anon_upload_enable=YES
+# 允许匿名用户新建文件夹
+anon_mkdir_write_enable=YES
+# 匿名用户删除文件和重命名文件
+anon_other_write_enable=YES
+# 匿名用户的掩码（022 的实际权限为 666-022=644）
+anon_umask=022
+anon_root=/nuoyis-server/sharefile
+
+
+# 系统用户登录
+local_enable=YES
+local_umask=022
+local_root=/nuoyis-server/sharefile
+chroot_local_user=YES
+allow_writeable_chroot=YES
+chroot_list_enable=YES
+chroot_list_file=/etc/vsftpd/chroot_list
+# 对文件具有写权限，否则无法上传
+write_enable=YES
+
+max_clients=0
+max_per_ip=0
+
+# 使用主机时间
+use_localtime=YES
+pam_service_name=vsftpd
+EOF
+
+cat > /etc/samba/smb.conf <<EOF
+# See smb.conf.example for a more detailed config file or
+# read the smb.conf manpage.
+# Run 'testparm' to verify the config is correct after
+# you modified it.
+#
+# Note:
+# SMB1 is disabled by default. This means clients without support for SMB2 or
+# SMB3 are no longer able to connect to smbd (by default).
+
+[global]
+	workgroup = SAMBA
+	security = user
+
+	passdb backend = tdbsam
+
+	printing = cups
+	printcap name = cups
+	load printers = yes
+	cups options = raw
+	map to guest = bad user
+
+[homes]
+	comment = Home Directories
+	valid users = %S, %D%w%S
+	browseable = No
+	read only = No
+	inherit acls = Yes
+
+[printers]
+	comment = All Printers
+	path = /var/tmp
+	printable = Yes
+	create mask = 0600
+	browseable = No
+
+[print$]
+	comment = Printer Drivers
+	path = /var/lib/samba/drivers
+	write list = @printadmin root
+	force group = @printadmin
+	create mask = 0664
+	directory mask = 0775
+
+[share]
+        comment = nuoyis's share
+        path = /nuoyis-server/sharefile
+		browseable = yes
+        public = yes
+        writable = yes
+EOF
+
+cat >> /etc/profile << EOF
+echo "################################"
+echo "#  Welcome  to  nuoyis's  NAS  #"
+echo "################################"
+EOF
+
+cat > /$auth-server/nginx/conf/default.conf << EOF
+server {
+		listen 80;
+       	# listen [::]:80;
+		# listen 443 ssl;
+		server_name localhost;
+		#charset koi8-r;
+		charset utf-8;
+	location /nuoyisnb {
+                alias /nuoyis-server/sharefile;
+                autoindex on;                         # 启用自动首页功能
+                autoindex_format html;                # 首页格式为HTML
+                autoindex_exact_size off;             # 文件大小自动换算
+                autoindex_localtime on;               # 按照服务器时间显示文件时间
+        
+                default_type application/octet-stream;# 将当前目录中所有文件的默认MIME类型设置为
+                                                # application/octet-stream
+                if ($request_filename ~* ^.*?\.(txt|doc|pdf|rar|gz|zip|docx|exe|xlsx|ppt|pptx)$) {
+                # 当文件格式为上述格式时，将头字段属性Content-Disposition的值设置为"attachment"
+                add_header Content-Disposition: 'attachment;'; 
+                }
+                sendfile on;                          # 开启零复制文件传输功能
+                sendfile_max_chunk 1m;                # 每个sendfile调用的最大传输量为1MB
+                tcp_nopush on;                        # 启用最小传输限制功能
+        
+        #      aio on;                               # 启用异步传输
+                directio 5m;                          # 当文件大于5MB时以直接读取磁盘的方式读取文件
+                directio_alignment 4096;              # 与磁盘的文件系统对齐
+                output_buffers 4 32k;                 # 文件输出的缓冲区大小为128KB
+        
+        #       limit_rate 1m;                        # 限制下载速度为1MB
+        #       limit_rate_after 2m;                  # 当客户端下载速度达到2MB时进入限速模式
+                max_ranges 4096;                      # 客户端执行范围读取的最大值是4096B
+                send_timeout 20s;                     # 客户端引发传输超时时间为20s
+                postpone_output 2048;                 # 当缓冲区的数据达到2048B时再向客户端发送
+	}
+	location /{
+		rewrite ^/(.*) https://blog.nuoyis.net permanent;
+	}
+}
+EOF
+systemctl reload nginx
+nuoyis_systemctl_manger start vsftpd smb nmb
+}
+
 # lnmp安装类
 nuoyis_lnmp_install(){
 	echo "安装lnmp"
@@ -222,14 +379,13 @@ nuoyis_lnmp_install(){
 			yes | dnf module reset php
 			yes | dnf module install php:remi-8.2
 			nuoyis_install_manger install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb*
-			nuoyis_systemctl_manger start nginx
-			nuoyis_systemctl_manger start php-fpm
-			nuoyis_systemctl_manger start mariadb
+			nuoyis_systemctl_manger start nginx php-fpm mariadb
+			# ln -sf 
 		else
 			# 编译安装
 			echo "创建lnmp基础文件夹"
-			mkdir -p /$auth-server/{nginx/{webside,server,conf},php,mysql}
-
+			mkdir -p /$auth-server/{logs/nginx,nginx/{webside,server,conf},php/{server,conf},mysql}
+			touch /nuoyis-server/logs/nginx/nginx.pid
 			id -u nuoyis_web >/dev/null 2>&1
 			if [ $? -eq 1 ];then
 				useradd nuoyis_web -s /sbin/nologin -M
@@ -243,7 +399,8 @@ nuoyis_lnmp_install(){
 			./configure --prefix=/$auth-server/nginx/server --user=nuoyis_web --group=nuoyis_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
 			make -j$(nproc)&& make install
 			cd ..
-			mkdir -p /$auth-server/logs/nginx
+			# nuoyis_download_manager 
+			# ./configure --prefix=/$auth-server/php/server --sysconfdir=/$auth-server/php/conf --with-openssl --with-zlib --with-bz2 --with-curl --enable-bcmath --enable-gd --with-webp --with-jpeg --with-mhash --enable-mbstring --with-imap-ssl --with-mysqli --enable-exif --with-ffi --with-zip --enable-sockets --with-pcre-jit --enable-fpm --with-pdo-mysql --enable-pcntl
 			touch /$auth-server/logs/nginx/{error.log,nginx.pid}
 			rm -rf ./nginx-1.27.0
 			rm -rf ./nginx-1.27.0.tar.gz
@@ -264,36 +421,37 @@ nuoyis_lnmp_install(){
 		include       mime.types;
 		default_type  application/octet-stream;
 
-		#log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
-		#                  '\$status \$body_bytes_sent "\$http_referer" '
-		#                  '"\$http_user_agent" "\$http_x_forwarded_for"';
+		log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+		                  '\$status \$body_bytes_sent "\$http_referer" '
+		                  '"\$http_user_agent" "\$http_x_forwarded_for"';
 
-		#access_log  logs/access.log  main;
+		access_log  /nuoyis-server/logs/access.log  main;
 
 		sendfile        on;
-		#tcp_nopush     on;
+		tcp_nopush     on;
 
-		#keepalive_timeout  0;
+		# keepalive_timeout  0;
 		keepalive_timeout  65;
+		# type_hash_max_size 4096;
 		
 		gzip on;
 		include /$auth-server/nginx/conf/*.conf;
 	}
 EOF
-	
-	
+
 	cat > /$auth-server/nginx/conf/default.conf << EOF
 	server {
 		listen 80;
+        # listen [::]:80;
 		# listen 443 ssl;
-		server_name localhost;
+		server_name _;
 
 		#charset koi8-r;
-
+		charset utf-8;
 		#access_log  logs/host.access.log  main;
 
 		location / {
-			root   html;
+			root   /$auth-server/nginx/webside/default;
 			index  index.html index.htm;
 		}
 
@@ -370,7 +528,22 @@ EOF
 		#}
 
 				ln -s /$auth-server/nginx/server/sbin/nginx /usr/local/bin/
-				nginx
+cat > /etc/systemd/system/nginx.service <<EOF
+[Unit]
+Description=Nginx HTTP Server
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/nuoyis-server/nginx/server/sbin/nginx
+ExecReload=/nuoyis-server/nginx/server/sbin/nginx -s reload
+ExecStop=/nuoyis-server/nginx/server/sbin/nginx -s stop
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+		nuoyis_systemctl_manger start nginx
     	fi
 	else
 		nuoyis_install_manger install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
@@ -390,18 +563,7 @@ nuoyis_docker_install(){
 	mkdir -p /etc/docker
 	touch /etc/docker/daemon.json
 	cat > /etc/docker/daemon.json << EOF
-{
-"registry-mirrors": [
-	"https://docker66ccff.lovablewyh.eu.org"
-],
-"bip": "192.168.100.1/24",
-"default-address-pools": [
-	{
-	"base": "192.168.100.0/16",
-	"size": 24
-	}
-]
-}
+
 EOF
 	nuoyis_systemctl_manger start docker
 }
@@ -635,8 +797,8 @@ EOF
 # 脚本run --> 起始点
 
 echo -e "=================================================================="
-echo -e "     诺依阁服务器初始化脚本V2.8"
-echo -e "     更新时间:2024.09.02"
+echo -e "     诺依阁服务器初始化脚本V3.0"
+echo -e "     更新时间:2024.09.04"
 echo -e "     博客地址:https://blog.nuoyis.net"
 echo -e "     \e[31m\e[1m注意1:执行本脚本即同意作者方不承担执行脚本的后果 \e[0m"
 echo -e "     \e[31m\e[1m注意2:当前脚本pid为$$,如果卡死请执行kill -9 $$ \e[0m"
@@ -759,11 +921,20 @@ if [ $nuoyis_bt == "y" ];then
 	nuoyis_lnmp=n
 	nuoyis_docker=n
 else
-	read -p "附加项:是否安装LNMP环境(y/n):" nuoyis_lnmp
-	if [ $nuoyis_lnmp == "y" ];then
-	read -p "请输入是快速安装(y)还是编译安装(n):" nuoyis_lnmp_install_yn
+	read -p "附加项:是否安装NAS配套环境:" nuoyis_nas_go
+	if  [ $nuoyis_nas_go == "y" ];then
+		echo -e "\e[31m\e[1m注意:建议局域网使用，NAS系统安装vsftpd,lnmp环境,docker环境以及samba.目录将配置为:/nuoyis-server/sharefile\e[0m"
+		read -p "请按任意键继续" nuoyis_go
+		nuoyis_lnmp=y
+		nuoyis_lnmp_install_yn=n
+		nuoyis_docker=y
+	else
+		read -p "附加项:是否安装LNMP环境(y/n):" nuoyis_lnmp
+		if [ $nuoyis_lnmp == "y" ];then
+			read -p "请输入是快速安装(y)还是编译安装(n):" nuoyis_lnmp_install_yn
+		fi
+		read -p "附加项:是否安装Docker(y/n):" nuoyis_docker
 	fi
-	read -p "附加项:是否安装Docker(y/n):" nuoyis_docker
 fi
 
 # echo "网卡(校园网)静态配置"
@@ -800,7 +971,8 @@ nuoyis_install_manger installfull --disablerepo=\* --enablerepo=elrepo-kernel ke
 nuoyis_install_manger remove kernel-tools-libs.x86_64 kernel-tools.x86_64
 nuoyis_install_manger installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml-tools.x86_64
 else
-	echo "暂时不支持rhel以外系列更新内核"
+	# https://zichen.zone/archives/debian_linux_kernel_update.html
+	nuoyis_install_manger install linux-image-amd64 linux-headers-amd64
 fi
 
 nuoyis_systemctl_manger start tuned.service
@@ -824,6 +996,11 @@ fi
 # 安装lnmp
 if [ $nuoyis_lnmp == "y" ];then
 	nuoyis_lnmp_install
+fi
+
+# 安装nas环境
+if [ $nuoyis_nas_go == "y" ];then
+	nuoyis_nas_install
 fi
 
 # 安装docker
