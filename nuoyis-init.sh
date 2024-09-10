@@ -208,9 +208,13 @@ EOF
 
 # nas配置类
 nuoyis_nas_install(){
+sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+useradd nuoyis-file
 mkdir -p /nuoyis-server/sharefile
-chown -R root:ftp /nuoyis-server/sharefile
+chown -R nuoyis-file:nuoyis-file /nuoyis-server/sharefile
+chown root:nuoyis-file /nuoyis-server/sharefile
 chmod -R 775 /nuoyis-server/sharefile
+# chmod g+s /nuoyis-server/sharefile
 # 额外配置
 nuoyis_install_manger install vsftpd samba*
 
@@ -236,7 +240,8 @@ anon_other_write_enable=YES
 # 匿名用户的掩码（022 的实际权限为 666-022=644）
 anon_umask=022
 anon_root=/nuoyis-server/sharefile
-
+chown_uploads=YES
+chown_username=nuoyis-file
 
 # 系统用户登录
 local_enable=YES
@@ -304,9 +309,14 @@ cat > /etc/samba/smb.conf <<EOF
 [share]
         comment = nuoyis's share
         path = /nuoyis-server/sharefile
-		browseable = yes
+		browsable = yes
+		writable = yes
+		guest ok = yes
+		force user = nuoyis-file
+		force group = nuoyis-file
+		create mask = 0775
+		directory mask = 0775
         public = yes
-        writable = yes
 EOF
 
 cat >> /etc/profile << EOF
@@ -332,7 +342,7 @@ server {
         
                 default_type application/octet-stream;# 将当前目录中所有文件的默认MIME类型设置为
                                                 # application/octet-stream
-                if ($request_filename ~* ^.*?\.(txt|doc|pdf|rar|gz|zip|docx|exe|xlsx|ppt|pptx)$) {
+                if (\$request_filename ~* ^.*?\.(txt|doc|pdf|rar|gz|zip|docx|exe|xlsx|ppt|pptx)$) {
                 # 当文件格式为上述格式时，将头字段属性Content-Disposition的值设置为"attachment"
                 add_header Content-Disposition: 'attachment;'; 
                 }
