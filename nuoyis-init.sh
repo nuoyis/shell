@@ -825,6 +825,27 @@ if [ $whois != "root" ];then
 	exit 1
 fi
 
+echo "设置虚拟内存"
+memory=`free -m | awk '/^Mem:/ {print $2}'`
+if [ $memory -lt 2048 ];then
+	if [ $memory -lt 1024 ];then
+		memory=1024
+	else
+		memory=2048
+	fi
+	swapsize=$[memory*2];
+	echo "vm.swappiness=60" >> /etc/sysctl.conf
+else
+	swapsize=$memory;
+fi
+dd if=/dev/zero of=/nuoyis-swap bs=1M count=$swapsize
+chmod 0600 /nuoyis-swap
+mkswap -f /nuoyis-swap
+swapon /nuoyis-swap
+echo "/nuoyis-swap    swap    swap    defaults    0 0" >> /etc/fstab
+mount -a
+sysctl -p
+
 echo "创建$auth服务初始化内容"
 mkdir -p /$auth-server/{openssl,logs,shell}
 # for i in 
@@ -930,6 +951,7 @@ if [ $nuoyis_bt == "y" ];then
 	read -p "请按任意键继续" nuoyis_go
 	nuoyis_lnmp=n
 	nuoyis_docker=n
+	nuoyis_nas_go=n
 else
 	read -p "附加项:是否安装NAS配套环境:" nuoyis_nas_go
 	if  [ $nuoyis_nas_go == "y" ];then
