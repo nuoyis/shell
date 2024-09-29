@@ -29,6 +29,7 @@ if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
 		;;
 	esac
 	setenforce 0
+	sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
 elif command -v apt-get > /dev/null 2>&1 && command -v dpkg > /dev/null 2>&1; then
     PM="apt"
 fi
@@ -406,6 +407,7 @@ nuoyis_lnmp_install(){
 			cd nginx-1.27.0
 			./configure --prefix=/$auth-server/nginx/server --user=nuoyis_web --group=nuoyis_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
 			make -j$(nproc)&& make install
+			chmod +x /nuoyis-server/nginx/server/sbin/nginx
 			cd ..
 			# nuoyis_download_manager 
 			# ./configure --prefix=/$auth-server/php/server --sysconfdir=/$auth-server/php/conf --with-openssl --with-zlib --with-bz2 --with-curl --enable-bcmath --enable-gd --with-webp --with-jpeg --with-mhash --enable-mbstring --with-imap-ssl --with-mysqli --enable-exif --with-ffi --with-zip --enable-sockets --with-pcre-jit --enable-fpm --with-pdo-mysql --enable-pcntl
@@ -543,9 +545,9 @@ After=network.target
 
 [Service]
 Type=forking
-ExecStart=/nuoyis-server/nginx/server/sbin/nginx
-ExecReload=/nuoyis-server/nginx/server/sbin/nginx -s reload
-ExecStop=/nuoyis-server/nginx/server/sbin/nginx -s stop
+ExecStart=nginx
+ExecReload=nginx -s reload
+ExecStop=nginx -s stop
 PrivateTmp=true
 
 [Install]
@@ -837,8 +839,8 @@ EOF
 # 脚本run --> 起始点
 
 echo -e "=================================================================="
-echo -e "     诺依阁服务器初始化脚本V3.0"
-echo -e "     更新时间:2024.09.04"
+echo -e "     诺依阁服务器初始化脚本V3.8"
+echo -e "     更新时间:2024.09.29"
 echo -e "     博客地址:https://blog.nuoyis.net"
 echo -e "     \e[31m\e[1m注意1:执行本脚本即同意作者方不承担执行脚本的后果 \e[0m"
 echo -e "     \e[31m\e[1m注意2:当前脚本pid为$$,如果卡死请执行kill -9 $$ \e[0m"
