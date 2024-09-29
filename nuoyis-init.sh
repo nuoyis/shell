@@ -25,10 +25,8 @@ if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
     PM="yum"
 	case $system_name in
 		"CentOS")
-		osname="centos-stream/\$releasever-stream"
+		osname="centos-stream\$releasever-stream"
 		;;
-		*)
-		osname="rockylinux/\$releasever"
 	esac
 	setenforce 0
 elif command -v apt-get > /dev/null 2>&1 && command -v dpkg > /dev/null 2>&1; then
@@ -81,7 +79,7 @@ nuoyis_install_manger(){
 	case $1 in
 		"remove")
 			# 移除指定的软件包
-			yes | $PM remove $2 -y
+			yes | $PM autoremove $2 -y
 			;;
 		"install")
 			# 安装多个指定的软件包
@@ -611,16 +609,29 @@ nuoyis_source_installer(){
 				echo "模块依赖修复和冲突模块禁用完成。"
 			fi
 
-			if [ ! -d /etc/yum.repos.d/bak ];then
-				mkdir -p /etc/yum.repos.d/bak
-			fi
-			mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
-			mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
+			# 判断源站
+			if [ "$nuoyis_yum_install" -ne 1 ] && [ "$nuoyis_yum_install" -ne 2 ]; then
+				nuoyis_download_manager https://3lu.cn/main.sh
+				source main.sh
+				echo "yes"
+			else
+				if [ $nuoyis_yum_install -eq 1 ];then
+					yumurl="mirrors.jcut.edu.cn"
+					osname=${osname:-rocky/\$releasever}
+				else
+					yumurl="mirrors.aliyun.com"
+					osname=${osname:-rockylinux/\$releasever}
+				fi
+				if [ ! -d /etc/yum.repos.d/bak ];then
+					mkdir -p /etc/yum.repos.d/bak
+				fi
+				mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
+				mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
 
-			cat > /etc/yum.repos.d/$auth.repo << EOF
+				cat > /etc/yum.repos.d/$auth.repo << EOF
 [${auth}-BaseOS]
 name=${auth} - BaseOS
-baseurl=https://mirrors.aliyun.com/${osname}/BaseOS/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/BaseOS/\$basearch/os/
 gpgcheck=0
 enabled=1
 countme=1
@@ -628,7 +639,7 @@ metadata_expire=6h
 
 [${auth}-baseos-debuginfo]
 name=${auth} - BaseOS - Debug
-baseurl=https://mirrors.aliyun.com/${osname}/BaseOS/\$basearch/debug/tree/
+baseurl=https://${yumurl}/${osname}/BaseOS/\$basearch/debug/tree/
 gpgcheck=0
 enabled=1
 countme=1
@@ -636,7 +647,7 @@ metadata_expire=6h
 
 [${auth}-baseos-source]
 name=${auth} - BaseOS - Source
-baseurl=https://mirrors.aliyun.com/${osname}/BaseOS/source/tree/
+baseurl=https://${yumurl}/${osname}/BaseOS/source/tree/
 gpgcheck=0
 enabled=1
 countme=1
@@ -644,7 +655,7 @@ metadata_expire=6h
 
 [${auth}-appstream]
 name=${auth} - AppStream
-baseurl=https://mirrors.aliyun.com/${osname}/AppStream/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/AppStream/\$basearch/os/
 gpgcheck=0
 enabled=1
 countme=1
@@ -652,7 +663,7 @@ metadata_expire=6h
 
 [${auth}-appstream-debuginfo]
 name=${auth} - AppStream - Debug
-baseurl=https://mirrors.aliyun.com/${osname}/AppStream/\$basearch/debug/tree/
+baseurl=https://${yumurl}/${osname}/AppStream/\$basearch/debug/tree/
 gpgcheck=0
 enabled=1
 countme=1
@@ -660,7 +671,7 @@ metadata_expire=6h
 
 [${auth}-appstream-source]
 name=${auth} - AppStream - Source
-baseurl=https://mirrors.aliyun.com/${osname}/AppStream/source/tree/
+baseurl=https://${yumurl}/${osname}/AppStream/source/tree/
 gpgcheck=0
 enabled=1
 countme=1
@@ -668,7 +679,7 @@ metadata_expire=6h
 
 [${auth}-crb]
 name=${auth} - CRB
-baseurl=https://mirrors.aliyun.com/${osname}/CRB/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/CRB/\$basearch/os/
 gpgcheck=0
 enabled=1
 countme=1
@@ -676,7 +687,7 @@ metadata_expire=6h
 
 [${auth}-crb-debuginfo]
 name=${auth} - CRB - Debug
-baseurl=https://mirrors.aliyun.com/${osname}/CRB/\$basearch/debug/tree/
+baseurl=https://${yumurl}/${osname}/CRB/\$basearch/debug/tree/
 gpgcheck=0
 enabled=1
 countme=1
@@ -684,61 +695,80 @@ metadata_expire=6h
 
 [${auth}-crb-source]
 name=${auth} - CRB - Source
-baseurl=https://mirrors.aliyun.com/${osname}/CRB/source/tree/
+baseurl=https://${yumurl}/${osname}/CRB/source/tree/
 gpgcheck=0
 enabled=1
 countme=1
 metadata_expire=6h
 EOF
-	echo "skip_broken=True" >> /etc/yum.conf
-	echo "skip_broken=True" >> /etc/dnf/dnf.conf
+				echo "skip_broken=True" >> /etc/yum.conf
+				echo "skip_broken=True" >> /etc/dnf/dnf.conf
 
-	echo "正在配置附加源"
-	nuoyis_install_manger installcheck epel
-	if [ $? -eq 0 ];then
-		nuoyis_install_manger remove epel-release epel-next-release
-	fi
+				echo "正在配置附加源"
+				nuoyis_install_manger installcheck epel
+				if [ $? -eq 0 ];then
+					nuoyis_install_manger remove epel-release epel-next-release
+				fi
 
-	nuoyis_install_manger installcheck remi
-	if [ $? -eq 0 ];then
-		nuoyis_install_manger remove remi-release-9.4-2.el9.remi.noarch
-	fi
+				nuoyis_install_manger installcheck remi
+				if [ $? -eq 0 ];then
+					nuoyis_install_manger remove remi-release-9.4-2.el9.remi.noarch
+				fi
 
-	nuoyis_install_manger installcheck elrepo
-	if [ $? -eq 0 ];then
-		nuoyis_install_manger remove elrepo-release.noarch
-	fi
+				nuoyis_install_manger installcheck elrepo
+				if [ $? -eq 0 ];then
+					nuoyis_install_manger remove elrepo-release.noarch
+				fi
 
-	rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
-	nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm
-	sudo sed -e 's!^metalink=!#metalink=!g' \
-    -e 's!^#baseurl=!baseurl=!g' \
-    -e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
-    -e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
-    -i /etc/yum.repos.d/epel{,-testing}.repo
-	sed -i 's/mirrorlist=/#mirrorlist=/g' /etc/yum.repos.d/elrepo.repo
-	sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-    -e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-    -e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-    -i  /etc/yum.repos.d/remi*
-	sed -i 's#elrepo.org/linux#mirrors.cernet.edu.cn/elrepo#g' /etc/yum.repos.d/elrepo.repo
-	nuoyis_install_manger install https://shell.nuoyis.net/download/remi-release-9.rpm
+				rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
+				nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm
+				sudo sed -e 's!^metalink=!#metalink=!g' \
+				-e 's!^#baseurl=!baseurl=!g' \
+				-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
+				-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
+				-i /etc/yum.repos.d/epel{,-testing}.repo
+				sed -i 's/mirrorlist=/#mirrorlist=/g' /etc/yum.repos.d/elrepo.repo
+				sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+				-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+				-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+				-i  /etc/yum.repos.d/remi*
+				sed -i 's#elrepo.org/linux#mirrors.cernet.edu.cn/elrepo#g' /etc/yum.repos.d/elrepo.repo
+				nuoyis_install_manger install https://shell.nuoyis.net/download/remi-release-9.rpm
+				fi
 	else
 		# sudo sed -i -r 's#http://(archive|security).ubuntu.com#https://mirrors.aliyun.com#g' /etc/apt/sources.list && sudo apt-get update
-		echo "debian架构系列正在进入第三方脚本，请注意版本安全"
+		echo "正在进入第三方脚本，请注意版本安全"
 		nuoyis_download_manager https://3lu.cn/main.sh
 		source main.sh
 		echo "yes"
 	fi
-
+	
 	if [ $system_name == "Red" ];then
 		echo "正在对RHEL系统进行openssl系统特调"
 		nuoyis_install_manger remove subscription-manager-gnome     
 		nuoyis_install_manger remove subscription-manager-firstboot     
 		nuoyis_install_manger remove subscription-manager
 		rpm -e --nodeps openssl-fips-provider
+		rpm -e --nodeps redhat-logos
+		rpm -e --nodeps redhat-release
 		rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
-		nuoyis_install_manger install https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+		nuoyis_download_manager https://mirrors.aliyun.com/rockylinux/9.4/BaseOS/x86_64/os/Packages/r/rocky-release-9.4-1.7.el9.noarch.rpm
+		nuoyis_download_manager https://mirrors.aliyun.com/rockylinux/9.4/BaseOS/x86_64/os/Packages/r/rocky-repos-9.4-1.7.el9.noarch.rpm
+		sudo rm -rf /usr/share/redhat-release
+		rpm -ivh --force --nodeps openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+		rpm -ivh --force --nodeps openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+		rpm -ivh --force --nodeps rocky-repos-9.4-1.7.el9.noarch.rpm
+		rpm -ivh --force --nodeps rocky-release-9.4-1.7.el9.noarch.rpm
+		rm -rf openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+		rm -rf openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+		rm -rf rocky-repos-9.4-1.7.el9.noarch.rpm
+		rm -rf rocky-release-9.4-1.7.el9.noarch.rpm
+		rm -rf /etc/yum.repos.d/rocky*.repo
+		# 可视化处理
+		# sudo dnf groupinstall "Server with GUI"
+		# nuoyis_install_manger install https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
 		if [ -d /sys/firmware/efi ] && [ -d /boot/efi/EFI/redhat ];then
 			echo "你的Boot分区为EFI，正在进行特别优化"
 			mv /boot/efi/EFI/redhat/ /boot/efi/EFI/rocky
@@ -834,9 +864,12 @@ if [ $memory -lt 2048 ];then
 		memory=2048
 	fi
 	swapsize=$[memory*2];
+	cat > /etc/sysctl.conf << EOF
+$(egrep -v '^vm.swappiness' /etc/sysctl.conf)
+EOF
 	echo "vm.swappiness=60" >> /etc/sysctl.conf
 else
-	swapsize=$memory;
+	swapsize=4096;
 fi
 dd if=/dev/zero of=/nuoyis-swap bs=1M count=$swapsize
 chmod 0600 /nuoyis-swap
@@ -944,6 +977,7 @@ if [ $PM == "yum" ];then
 fi
 
 echo "环境提前配置问答"
+read -p "必选项:配置校园镜像站还是阿里源还是第三方配源(1校园，2阿里，3三方)：" nuoyis_yum_install
 read -p "附加项:是否安装/重装宝塔面板(y/n):" nuoyis_bt
 if [ $nuoyis_bt == "y" ];then
 	echo "宝塔启动安装后，则请在宝塔内安装其他附加环境,将不再提醒其他环境"
@@ -1015,6 +1049,18 @@ EOF
 cat >> /etc/sysctl.conf << EOF
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
+kernel.sysrq = 1
+net.ipv4.neigh.default.gc_stale_time = 120
+net.ipv4.conf.all.rp_filter = 0
+net.ipv4.conf.default.rp_filter = 0
+net.ipv4.conf.default.arp_announce = 2
+net.ipv4.conf.lo.arp_announce = 2
+net.ipv4.conf.all.arp_announce = 2
+net.ipv4.tcp_max_tw_buckets = 5000
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_max_syn_backlog = 1024
+net.ipv4.tcp_synack_retries = 2
+net.ipv4.tcp_slow_start_after_idle = 0
 EOF
 sysctl -p
 
