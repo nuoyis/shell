@@ -9,3 +9,9 @@
 ```
 curl -sSO https://shell.nuoyis.net/nuoyis-init.sh;bash nuoyis-init.sh
 ```
+2. Ubuntu root登录解锁脚本
+一个解锁ubuntu root的小脚本
+执行命令:
+```
+curl -sSO https://shell.nuoyis.net/ubuntu-rootstart.sh;bash nuoyis-init.sh
+```
