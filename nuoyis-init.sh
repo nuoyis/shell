@@ -723,7 +723,7 @@ EOF
 				fi
 
 				rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
-				nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm
+				nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm https://shell.nuoyis.net/download/remi-release-9.rpm
 				sudo sed -e 's!^metalink=!#metalink=!g' \
 				-e 's!^#baseurl=!baseurl=!g' \
 				-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
@@ -734,8 +734,7 @@ EOF
 				-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
 				-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
 				-i  /etc/yum.repos.d/remi*
-				sed -i 's#elrepo.org/linux#mirrors.cernet.edu.cn/elrepo#g' /etc/yum.repos.d/elrepo.repo
-				nuoyis_install_manger install https://shell.nuoyis.net/download/remi-release-9.rpm
+				sed -i 's#elrepo.org/linux#mirrors.bfsu.edu.cn/elrepo#g' /etc/yum.repos.d/elrepo.repo
 				fi
 	else
 		# sudo sed -i -r 's#http://(archive|security).ubuntu.com#https://mirrors.aliyun.com#g' /etc/apt/sources.list && sudo apt-get update
@@ -830,7 +829,7 @@ EOF
 
 	echo "正在更新源"
 	nuoyis_install_manger clean
-	nuoyis_install_manger update
+	nuoyis_install_manger update                              
 	nuoyis_install_manger makecache
 	# fi
 }
