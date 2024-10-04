@@ -13,5 +13,5 @@ curl -sSO https://shell.nuoyis.net/nuoyis-init.sh;bash nuoyis-init.sh
 一个解锁ubuntu root的小脚本  
 执行命令:  
 ```
-curl -sSO https://shell.nuoyis.net/ubuntu-rootstart.sh;bash nuoyis-init.sh
+curl -sSO https://shell.nuoyis.net/ubuntu-rootstart.sh;bash ubuntu-rootstart.sh
 ```
