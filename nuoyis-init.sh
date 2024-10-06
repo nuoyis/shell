@@ -573,7 +573,18 @@ nuoyis_docker_install(){
 	mkdir -p /etc/docker
 	touch /etc/docker/daemon.json
 	cat > /etc/docker/daemon.json << EOF
-
+{
+  "registry-mirrors": [
+    "https://docker66ccff.lovablewyh.eu.org"
+  ],
+  "bip": "192.168.100.1/24",
+  "default-address-pools": [
+    {
+      "base": "192.168.100.0/16",
+      "size": 24
+    }
+  ]
+}
 EOF
 	nuoyis_systemctl_manger start docker
 }
