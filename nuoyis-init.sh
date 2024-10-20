@@ -12,13 +12,11 @@ dns="223.5.5.5"
 startTime=`date +%Y%m%d-%H:%M:%S`
 startTime_s=`date +%s`
 whois=$(whoami)
-# nuo_setnetwork_shell=$(ifconfig -a | grep -o '^\w*' | grep -v 'lo')
+# nuo_setnetwork_shell=$(ip a | grep -E '^[0-9]+: ' | grep -v lo | awk '{print $2}' | sed 's/://')
 nuo_setnetwork_shell=$(ip a | grep -oE "inet ([0-9]{1,3}.){3}[0-9]{1,3}" | awk 'NR==2 {print $2}')
-if [ -f "/etc/redhat-release" ];then
-	system_name=`head -n 1 /etc/os-release | grep -oP '(?<=NAME=").*(?=")' | awk '{print$1}'`
-	system_version=`cat /etc/os-release | grep -oP '(?<=VERSION_ID=").*(?=")'`
-	system_version=${system_version%.*}
-fi
+system_name=`head -n 1 /etc/os-release | grep -oP '(?<=NAME=").*(?=")' | awk '{print$1}'`
+system_version=`cat /etc/os-release | grep -oP '(?<=VERSION_ID=").*(?=")'`
+system_version=${system_version%.*}
 
 # 检测包管理器
 if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
@@ -27,9 +25,12 @@ if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
 		"CentOS")
 		osname="centos-stream\$releasever-stream"
 		;;
+		"openEuler")
 	esac
-	setenforce 0
-	sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+	if [ -f "/etc/redhat-release" ];then
+		setenforce 0
+		sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+	fi
 elif command -v apt-get > /dev/null 2>&1 && command -v dpkg > /dev/null 2>&1; then
     PM="apt"
 fi
@@ -387,7 +388,7 @@ nuoyis_lnmp_install(){
 			# 快速安装
 			yes | dnf module reset php
 			yes | dnf module install php:remi-8.2
-			nuoyis_install_manger install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb*
+			nuoyis_install_manger install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb-server
 			nuoyis_systemctl_manger start nginx php-fpm mariadb
 			# ln -sf 
 		else
@@ -568,6 +569,9 @@ nuoyis_docker_install(){
 	nuoyis_install_manger repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 	fi
 	sed -i 's+download.docker.com+mirrors.aliyun.com/docker-ce+' /etc/yum.repos.d/docker-ce.repo
+	if [ $system_name == "openEuler" ];then
+		sed -i 's+$releasever+8+'  /etc/yum.repos.d/docker-ce.repo
+	fi
 	nuoyis_install_manger makecache
 	nuoyis_install_manger install docker-ce
 	mkdir -p /etc/docker
@@ -594,53 +598,53 @@ nuoyis_source_installer(){
 	reponum=`$PM list | wc -l`
 	
 	# if [ $reponum -lt 1000 ];then
-		if [ $PM = "yum" ];then
-			echo "正在检查是否存在冲突/模块缺失"
-			echo "正在检查模块依赖问题..."
+if [ $PM = "yum" ];then
+	echo "正在检查是否存在冲突/模块缺失"
+	echo "正在检查模块依赖问题..."
 
-			nuoyis_install_check_modules_bug=$(yum check 2>&1)
+	nuoyis_install_check_modules_bug=$(yum check 2>&1)
 
-			if [ -z "$nuoyis_install_check_modules_bug" ]; then
-				echo "没有发现模块依赖问题,继续下一步"
-			else
-				echo "发现模块依赖问题："
-				# 提取并禁用冲突的模块
-				echo "正在禁用冲突模块"
-				while read -r module; do
-					# 提取模块名和版本
-					module_name=$(echo $module | grep -oP '(?<=module )[^:]+:[^ ]+' | sed 's/:[^:]*$//')
-					if [ -n "$module_name" ]; then
-						echo "禁用模块: $module_name"
-						sudo yum module disable "$module_name" -y
-						if [ $? -eq 0 ]; then
-							echo "模块 $module_name 禁用成功"
-						else
-							echo "模块 $module_name 禁用失败"
-						fi
-					fi
-				done <<< "$nuoyis_install_check_modules_bug"
-				echo "模块依赖修复和冲突模块禁用完成。"
-			fi
-
-			# 判断源站
-			if [ "$nuoyis_yum_install" -ne 1 ] && [ "$nuoyis_yum_install" -ne 2 ]; then
-				nuoyis_download_manager https://3lu.cn/main.sh
-				source main.sh
-				echo "yes"
-			else
-				if [ $nuoyis_yum_install -eq 1 ];then
-					yumurl="mirrors.jcut.edu.cn"
-					osname=${osname:-rocky/\$releasever}
+	if [ -z "$nuoyis_install_check_modules_bug" ]; then
+		echo "没有发现模块依赖问题,继续下一步"
+	else
+		echo "发现模块依赖问题："
+		# 提取并禁用冲突的模块
+		echo "正在禁用冲突模块"
+		while read -r module; do
+			# 提取模块名和版本
+			module_name=$(echo $module | grep -oP '(?<=module )[^:]+:[^ ]+' | sed 's/:[^:]*$//')
+			if [ -n "$module_name" ]; then
+				echo "禁用模块: $module_name"
+				sudo yum module disable "$module_name" -y
+				if [ $? -eq 0 ]; then
+					echo "模块 $module_name 禁用成功"
 				else
-					yumurl="mirrors.aliyun.com"
-					osname=${osname:-rockylinux/\$releasever}
+					echo "模块 $module_name 禁用失败"
 				fi
-				if [ ! -d /etc/yum.repos.d/bak ];then
-					mkdir -p /etc/yum.repos.d/bak
-				fi
-				mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
-				mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
+			fi
+		done <<< "$nuoyis_install_check_modules_bug"
+		echo "模块依赖修复和冲突模块禁用完成。"
+	fi
 
+	# 判断源站
+	if [ "$nuoyis_yum_install" -ne 1 ] && [ "$nuoyis_yum_install" -ne 2 ]; then
+		nuoyis_download_manager https://3lu.cn/main.sh
+		source main.sh
+		echo "yes"
+	else
+		if [ $system_name != "openEuler" ];then
+			if [ ! -d /etc/yum.repos.d/bak ];then
+				mkdir -p /etc/yum.repos.d/bak
+			fi
+			mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
+			mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
+			if [ $nuoyis_yum_install -eq 1 ];then
+				yumurl="mirrors.jcut.edu.cn"
+				osname=${osname:-rocky/\$releasever}
+			else
+				yumurl="mirrors.aliyun.com"
+				osname=${osname:-rockylinux/\$releasever}
+			fi
 				cat > /etc/yum.repos.d/$auth.repo << EOF
 [${auth}-BaseOS]
 name=${auth} - BaseOS
@@ -714,40 +718,43 @@ enabled=1
 countme=1
 metadata_expire=6h
 EOF
-				echo "skip_broken=True" >> /etc/yum.conf
-				echo "skip_broken=True" >> /etc/dnf/dnf.conf
+			echo "skip_broken=True" >> /etc/yum.conf
+			echo "skip_broken=True" >> /etc/dnf/dnf.conf
 
-				echo "正在配置附加源"
-				nuoyis_install_manger installcheck epel
-				if [ $? -eq 0 ];then
-					nuoyis_install_manger remove epel-release epel-next-release
-				fi
+			echo "正在配置附加源"
+			nuoyis_install_manger installcheck epel
+			if [ $? -eq 0 ];then
+				nuoyis_install_manger remove epel-release epel-next-release
+			fi
 
-				nuoyis_install_manger installcheck remi
-				if [ $? -eq 0 ];then
-					nuoyis_install_manger remove remi-release-9.4-2.el9.remi.noarch
-				fi
+			nuoyis_install_manger installcheck remi
+			if [ $? -eq 0 ];then
+				nuoyis_install_manger remove remi-release-9.4-2.el9.remi.noarch
+			fi
 
-				nuoyis_install_manger installcheck elrepo
-				if [ $? -eq 0 ];then
-					nuoyis_install_manger remove elrepo-release.noarch
-				fi
+			nuoyis_install_manger installcheck elrepo
+			if [ $? -eq 0 ];then
+				nuoyis_install_manger remove elrepo-release.noarch
+			fi
 
-				rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
-				nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm https://shell.nuoyis.net/download/remi-release-9.rpm
-				sudo sed -e 's!^metalink=!#metalink=!g' \
-				-e 's!^#baseurl=!baseurl=!g' \
-				-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
-				-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
-				-i /etc/yum.repos.d/epel{,-testing}.repo
-				sed -i 's/mirrorlist=/#mirrorlist=/g' /etc/yum.repos.d/elrepo.repo
-				sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-				-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-				-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-				-i  /etc/yum.repos.d/remi*
-				sed -i 's#elrepo.org/linux#mirrors.bfsu.edu.cn/elrepo#g' /etc/yum.repos.d/elrepo.repo
-				fi
-	else
+			rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
+			nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm https://shell.nuoyis.net/download/remi-release-9.rpm
+			sudo sed -e 's!^metalink=!#metalink=!g' \
+			-e 's!^#baseurl=!baseurl=!g' \
+			-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
+			-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
+			-i /etc/yum.repos.d/epel{,-testing}.repo
+			sed -i 's/mirrorlist=/#mirrorlist=/g' /etc/yum.repos.d/elrepo.repo
+			sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+			-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+			-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+			-i  /etc/yum.repos.d/remi*
+			sed -i 's#elrepo.org/linux#mirrors.bfsu.edu.cn/elrepo#g' /etc/yum.repos.d/elrepo.repo
+		else
+			sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
+		fi
+	fi
+	elif [ $PM = "apt" ];then
 		# sudo sed -i -r 's#http://(archive|security).ubuntu.com#https://mirrors.aliyun.com#g' /etc/apt/sources.list && sudo apt-get update
 		echo "正在进入第三方脚本，请注意版本安全"
 		nuoyis_download_manager https://3lu.cn/main.sh
@@ -755,6 +762,8 @@ EOF
 		echo "yes"
 	fi
 	
+
+	# 红帽系统特调
 	if [ $system_name == "Red" ];then
 		echo "正在对RHEL系统进行openssl系统特调"
 		nuoyis_install_manger remove subscription-manager-gnome     
@@ -849,8 +858,8 @@ EOF
 # 脚本run --> 起始点
 
 echo -e "=================================================================="
-echo -e "     诺依阁服务器初始化脚本V3.8"
-echo -e "     更新时间:2024.09.29"
+echo -e "     诺依阁服务器初始化脚本V4.0"
+echo -e "     更新时间:2024.10.20"
 echo -e "     博客地址:https://blog.nuoyis.net"
 echo -e "     \e[31m\e[1m注意1:执行本脚本即同意作者方不承担执行脚本的后果 \e[0m"
 echo -e "     \e[31m\e[1m注意2:当前脚本pid为$$,如果卡死请执行kill -9 $$ \e[0m"
@@ -904,7 +913,7 @@ if [ -z $HOSTNAME_CHECK ];then
 fi
 
 echo "正在检查支持版本"
-if [ $PM == "yum" ];then
+if [ $PM == "yum" ] && [ $system_name != "openEuler" ];then
 	if [ $system_version -lt 9 ];then
 		echo "不受支持版本,正在检测你的系统"
 		if [ $system_version -eq 8 ] && [ $system_name == "Rocky" ];then
@@ -989,7 +998,20 @@ if [ $PM == "yum" ];then
 fi
 
 echo "环境提前配置问答"
-read -p "必选项:配置校园镜像站还是阿里源还是第三方配源(1校园，2阿里，3三方)：" nuoyis_yum_install
+case $system_name in
+	"openEuler")
+		nuoyis_yum_install=2
+	;;
+	"Ubuntu")
+		nuoyis_yum_install=3
+	;;
+	"Debian")
+		nuoyis_yum_install=3
+	;;
+	*)
+		read -p "必选项:配置校园镜像站还是阿里源还是第三方配源(1校园，2阿里，3三方)：" nuoyis_yum_install
+esac
+
 read -p "附加项:是否安装/重装宝塔面板(y/n):" nuoyis_bt
 if [ $nuoyis_bt == "y" ];then
 	echo "宝塔启动安装后，则请在宝塔内安装其他附加环境,将不再提醒其他环境"
