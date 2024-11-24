@@ -579,6 +579,27 @@ nuoyis_docker_install(){
 	cat > /etc/docker/daemon.json << EOF
 {
   "registry-mirrors": [
+    "https://hub.atomgit.com",
+    "https://2a6bf1988cb6428c877f723ec7530dbc.mirror.swr.myhuaweicloud.com",
+    "https://docker.m.daocloud.io",
+    "https://hub-mirror.c.163.com",
+    "https://mirror.baidubce.com",
+    "https://your_preferred_mirror",
+    "https://dockerhub.icu",
+    "https://docker.registry.cyou",
+    "https://docker-cf.registry.cyou",
+    "https://dockercf.jsdelivr.fyi",
+    "https://docker.jsdelivr.fyi",
+    "https://dockertest.jsdelivr.fyi",
+    "https://mirror.aliyuncs.com",
+    "https://dockerproxy.com",
+    "https://mirror.baidubce.com",
+    "https://docker.m.daocloud.io",
+    "https://docker.nju.edu.cn",
+    "https://docker.mirrors.sjtug.sjtu.edu.cn",
+    "https://docker.mirrors.ustc.edu.cn",
+    "https://mirror.iscas.ac.cn",
+    "https://docker.rainbond.cc",
     "https://docker66ccff.lovablewyh.eu.org"
   ],
   "bip": "192.168.100.1/24",
@@ -775,17 +796,17 @@ EOF
 		rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
 		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
 		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		nuoyis_download_manager https://mirrors.aliyun.com/rockylinux/9.4/BaseOS/x86_64/os/Packages/r/rocky-release-9.4-1.7.el9.noarch.rpm
-		nuoyis_download_manager https://mirrors.aliyun.com/rockylinux/9.4/BaseOS/x86_64/os/Packages/r/rocky-repos-9.4-1.7.el9.noarch.rpm
+		nuoyis_download_manager https://shell.nuoyis.net/download/rocky-9.5-1.2.el9.noarch.rpm
+		nuoyis_download_manager https://shell.nuoyis.net/download/rocky-9.5-1.2.el9.noarch.rpm
 		sudo rm -rf /usr/share/redhat-release
 		rpm -ivh --force --nodeps openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
 		rpm -ivh --force --nodeps openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		rpm -ivh --force --nodeps rocky-repos-9.4-1.7.el9.noarch.rpm
-		rpm -ivh --force --nodeps rocky-release-9.4-1.7.el9.noarch.rpm
+		rpm -ivh --force --nodeps rocky-repos-9.5-1.2.el9.noarch.rpm
+		rpm -ivh --force --nodeps rocky-release-9.5-1.2.el9.noarch.rpm
 		rm -rf openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
 		rm -rf openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		rm -rf rocky-repos-9.4-1.7.el9.noarch.rpm
-		rm -rf rocky-release-9.4-1.7.el9.noarch.rpm
+		rm -rf rocky-repos-9.5-1.2.el9.noarch.rpm
+		rm -rf rocky-release-9.5-1.2.el9.noarch.rpm
 		rm -rf /etc/yum.repos.d/rocky*.repo
 		# 可视化处理
 		# sudo dnf groupinstall "Server with GUI"
