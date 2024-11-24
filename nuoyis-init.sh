@@ -796,8 +796,8 @@ EOF
 		rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
 		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
 		nuoyis_download_manager https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		nuoyis_download_manager https://shell.nuoyis.net/download/rocky-9.5-1.2.el9.noarch.rpm
-		nuoyis_download_manager https://shell.nuoyis.net/download/rocky-9.5-1.2.el9.noarch.rpm
+		nuoyis_download_manager https://shell.nuoyis.net/download/rocky-repos-9.5-1.2.el9.noarch.rpm
+		nuoyis_download_manager https://shell.nuoyis.net/download/rocky-release-9.5-1.2.el9.noarch.rpm
 		sudo rm -rf /usr/share/redhat-release
 		rpm -ivh --force --nodeps openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
 		rpm -ivh --force --nodeps openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
