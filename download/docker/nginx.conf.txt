@@ -45,8 +45,6 @@ http {
         ssl_certificate /nuoyis-web/nginx/server/1.27.3/conf/ssl/default.pem;
         ssl_certificate_key /nuoyis-web/nginx/server/1.27.3/conf/ssl/default.key;
         ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_stapling on;
-        ssl_stapling_verify on;
         ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
         ssl_prefer_server_ciphers on;
         ssl_session_cache shared:SSL:10m;
