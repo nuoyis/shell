@@ -1098,9 +1098,7 @@ fi
 
 nuoyis_systemctl_manger start tuned.service
 tuned-adm profile `tuned-adm recommend`
-cat > /etc/sysctl.conf << EOF
-$(egrep -v '^net.core.default_qdisc|^net.ipv4.tcp_congestion_control' /etc/sysctl.conf)
-EOF
+sed -i '/^net.core.default_qdisc/d; /^net.ipv4.tcp_congestion_control/d; /^net.bridge.bridge-nf-call-ip6tables/d; /^net.bridge.bridge-nf-call-iptables/d; /^net.ipv4.ip_forward/d' /etc/sysctl.conf
 cat >> /etc/sysctl.conf << EOF
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
