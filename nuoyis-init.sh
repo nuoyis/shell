@@ -980,29 +980,36 @@ if [ $whois != "root" ];then
 	exit 1
 fi
 
-echo "设置虚拟内存"
-memory=`free -m | awk '/^Mem:/ {print $2}'`
-if [ $memory -lt 2048 ];then
-	if [ $memory -lt 1024 ];then
-		memory=1024
-	else
-		memory=2048
-	fi
-	swapsize=$[memory*2];
-	cat > /etc/sysctl.conf << EOF
-$(egrep -v '^vm.swappiness' /etc/sysctl.conf)
-EOF
-	echo "vm.swappiness=60" >> /etc/sysctl.conf
+# 检查是否已有 swap 文件存在
+swap_file=$(swapon --show=NAME | grep -E '/nuoyis-swap')
+
+if [ -n "$swap_file" ];then
+	echo "虚拟内存已存在"
 else
-	swapsize=4096;
+	echo "设置虚拟内存"
+	memory=`free -m | awk '/^Mem:/ {print $2}'`
+	if [ $memory -lt 2048 ];then
+		if [ $memory -lt 1024 ];then
+			memory=1024
+		else
+			memory=2048
+		fi
+		swapsize=$[memory*2];
+		cat > /etc/sysctl.conf << EOF
+	$(egrep -v '^vm.swappiness' /etc/sysctl.conf)
+EOF
+		echo "vm.swappiness=60" >> /etc/sysctl.conf
+	else
+		swapsize=4096;
+	fi
+	dd if=/dev/zero of=/nuoyis-swap bs=1M count=$swapsize
+	chmod 0600 /nuoyis-swap
+	mkswap -f /nuoyis-swap
+	swapon /nuoyis-swap
+	echo "/nuoyis-swap    swap    swap    defaults    0 0" >> /etc/fstab
+	mount -a
+	sysctl -p
 fi
-dd if=/dev/zero of=/nuoyis-swap bs=1M count=$swapsize
-chmod 0600 /nuoyis-swap
-mkswap -f /nuoyis-swap
-swapon /nuoyis-swap
-echo "/nuoyis-swap    swap    swap    defaults    0 0" >> /etc/fstab
-mount -a
-sysctl -p
 
 echo "创建$auth服务初始化内容"
 mkdir -p /$auth-server/{openssl,logs,shell}
