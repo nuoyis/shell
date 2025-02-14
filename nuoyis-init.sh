@@ -374,6 +374,7 @@ nuoyis_systemctl_manger start vsftpd smb nmb
 nuoyis_lnmp_install(){
 	echo "安装lnmp"
 	echo "正在测试中，请晚些时候再执行"
+	sleep 30
 	if [ $PM = "yum" ];then
 		nuoyis_install_manger install pcre pcre-devel zlib zlib-devel libxml2 libxml2-devel readline readline-devel ncurses ncerses-devel perl-devel perl-ExtUtils-Embed
 		aboutserver=`systemctl is-active firewalld`
@@ -384,14 +385,14 @@ nuoyis_lnmp_install(){
 		firewall-cmd --zone=public --add-service=http --per
 		firewall-cmd --zone=public --add-port=3306/tcp --per
 		firewall-cmd --reload
-		if [ $nuoyis_lnmp_install_yn = "y" ];then
+		if [ $nuoyis_lnmp_install_yn = "1" ];then
 			# 快速安装
 			yes | dnf module reset php
 			yes | dnf module install php:remi-8.2
 			nuoyis_install_manger install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb-server
 			nuoyis_systemctl_manger start nginx php-fpm mariadb
 			# ln -sf 
-		else
+		elif [ $nuoyis_lnmp_install_yn = "2" ];then
 			# 编译安装
 			echo "创建lnmp基础文件夹"
 			mkdir -p /$auth-server/{logs/nginx,nginx/{webside,server,conf},php/{server,conf},mysql}
@@ -404,11 +405,89 @@ nuoyis_lnmp_install(){
 			nuoyis_install_manger install gd gd-devel.x86_64 bzip2 bzip2-devel libcurl libcurl-devel* libjpeg libjpeg-devel libpng libpng-devel freetype freetype-devel gmp gmp-devel readline readline-devel libxslt libxslt-devel net-snmp-devel* libtool sqlite-devel* make expat-devel autoconf automake libxml* sqlite* bzip2-devel libcurl* net*
 			# --with-openssl=${nuoyis_openssl}
 			nuoyis_download_manager https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
+			nuoyis_download_manager https://alist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/php/php-8.4.2.tar.gz
 			tar -xzvf nginx-1.27.0.tar.gz
+			tar -xzvf php-8.4.2.tar.gz
 			cd nginx-1.27.0
-			./configure --prefix=/$auth-server/nginx/server --user=nuoyis_web --group=nuoyis_web --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module
-			make -j$(nproc)&& make install
+			sed -i 's/#define NGINX_VERSION\s\+".*"/#define NGINX_VERSION      "1.27.0"/g' ./src/core/nginx.h
+            sed -i 's/"nginx\/" NGINX_VERSION/"nuoyis server"/g' ./src/core/nginx.h
+            sed -i 's/Server: nginx/Server: nuoyis server/g' ./src/http/ngx_http_header_filter_module.c
+            sed -i 's/"Server: " NGINX_VER CRLF/"Server: nuoyis server" CRLF/g' ./src/http/ngx_http_header_filter_module.c
+            sed -i 's/"Server: " NGINX_VER_BUILD CRLF/"Server: nuoyis server" CRLF/g' ./src/http/ngx_http_header_filter_module.c
+            ./configure --prefix=/nuoyis-web/nginx/server/1.27.0 \
+                --user=nuoyis-web --group=nuoyis-web \
+                --with-compat \
+                --with-file-aio \
+                --with-threads \
+                --with-http_addition_module \
+                --with-http_auth_request_module \
+                --with-http_dav_module \
+                --with-http_flv_module \
+                --with-http_gunzip_module \
+                --with-http_gzip_static_module \
+                --with-http_mp4_module \
+                --with-http_random_index_module \
+                --with-http_realip_module \
+                --with-http_secure_link_module \
+                --with-http_slice_module \
+                --with-http_ssl_module \
+                --with-http_stub_status_module \
+                --with-http_sub_module \
+                --with-http_v2_module \
+                --with-mail \
+                --with-mail_ssl_module \
+                --with-stream \
+                --with-stream_realip_module \
+                --with-stream_ssl_module \
+                --with-stream_ssl_preread_module
+			make -j$(nproc) && make install
 			chmod +x /nuoyis-server/nginx/server/sbin/nginx
+			cd ../php-8.4.2
+			./configure --prefix=/nuoyis-web/php/8.4.2/ \
+                --enable-static \
+                --disable-shared \
+                --with-config-file-path=/nuoyis-web/php/8.4.2/etc/ \
+                --with-curl \
+                --with-freetype \
+                --enable-gd \
+                --with-jpeg \
+                --with-gettext \
+                --with-libdir=lib64 \
+                --with-libxml \
+                --with-mysqli \
+                --with-openssl \
+                --with-pdo-mysql \
+                --with-pdo-sqlite \
+                --with-pear \
+                --enable-sockets \
+                --with-mhash \
+                --with-ldap-sasl \
+                --with-xsl \
+                --with-zlib \
+                --with-zip \
+                --with-bz2 \
+                --with-iconv \
+                --enable-fpm \
+                --enable-pdo \
+                --enable-bcmath \
+                --enable-mbregex \
+                --enable-mbstring \
+                --enable-opcache \
+                --enable-pcntl \
+                --enable-shmop \
+                --enable-soap \
+                --enable-ftp \
+                --with-xpm \
+                --enable-xml \
+                --enable-sysvsem \
+                --enable-cli \
+                --enable-intl \
+                --enable-calendar \
+                --enable-static \
+                --enable-ctype \
+                --enable-mysqlnd \
+                --enable-session
+		    make -j$(nproc) && make install
 			cd ..
 			# nuoyis_download_manager 
 			# ./configure --prefix=/$auth-server/php/server --sysconfdir=/$auth-server/php/conf --with-openssl --with-zlib --with-bz2 --with-curl --enable-bcmath --enable-gd --with-webp --with-jpeg --with-mhash --enable-mbstring --with-imap-ssl --with-mysqli --enable-exif --with-ffi --with-zip --enable-sockets --with-pcre-jit --enable-fpm --with-pdo-mysql --enable-pcntl
@@ -503,42 +582,18 @@ EOF
 		#}
 	}
 EOF
-		# another virtual host using mix of IP-, name-, and port-based configuration
-		#
-		#server {
-		#    listen       8000;
-		#    listen       somename:8080;
-		#    server_name  somename  alias  another.alias;
 
-		#    location / {
-		#        root   html;
-		#        index  index.html index.htm;
-		#    }
-		#}
+curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/nginx.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/nginx.conf.txt && \
+curl -L -o /nuoyis-web/nginx/webside/default/index.html https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/index.html && \
+curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/ssl/default.pem https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.pem && \
+curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/ssl/default.key https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.key && \
+curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/start-php-84.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/start-php-84.conf.txt && \
+curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/path.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/path.conf.txt && \
+curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/start-php-81.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/start-php-81.conf.txt && \
+curl -L -o /nuoyis-web/php/8.4.2/etc/php.ini https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/84php.ini.txt && \
+curl -L -o /nuoyis-web/php/8.4.2/etc/php-fpm.d/fpm.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/fpm-84.conf.txt && \
 
-
-		# HTTPS server
-		#
-		#server {
-		#    listen       443 ssl;
-		#    server_name  localhost;
-
-		#    ssl_certificate      cert.pem;
-		#    ssl_certificate_key  cert.key;
-
-		#    ssl_session_cache    shared:SSL:1m;
-		#    ssl_session_timeout  5m;
-
-		#    ssl_ciphers  HIGH:!aNULL:!MD5;
-		#    ssl_prefer_server_ciphers  on;
-
-		#    location / {
-		#        root   html;
-		#        index  index.html index.htm;
-		#    }
-		#}
-
-				ln -s /$auth-server/nginx/server/sbin/nginx /usr/local/bin/
+ln -s /$auth-server/nginx/server/sbin/nginx /usr/local/bin/
 cat > /etc/systemd/system/nginx.service <<EOF
 [Unit]
 Description=Nginx HTTP Server
@@ -555,6 +610,75 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 		nuoyis_systemctl_manger start nginx
+		else
+		   mkdir -p /nuoyis-service/web/{nginx/{conf,webside,ssl},mariadb/{init,server,import,config}}
+           nuoyis_docker_install
+		   cat > docker-compose.yaml << EOF
+version: '2.32.2'
+services:
+  nuoyis-lnmp-np:
+    container_name: nuoyis-lnmp-np
+    image: swr.cn-north-4.myhuaweicloud.com/nuoyis/nuoyis-lnp:v1.32
+    networks: 
+      nuoyis-net:
+        aliases:
+          - nuoyis-lnp
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /nuoyis-service/web/nginx/conf:/nuoyis-web/nginx/conf
+      - /nuoyis-service/web/nginx/webside:/nuoyis-web/nginx/webside
+      - /nuoyis-service/web/nginx/ssl:/nuoyis-web/nginx/ssl
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      retries: 3
+      start_period: 10s
+      timeout: 10s
+    restart: always
+  nuoyis-lnmp-mariadb:
+    container_name: nuoyis-lnmp-mariadb
+    image: mariadb:latest
+    networks: 
+      nuoyis-net:
+        aliases:
+          - nuoyis-mariadb
+    environment:
+      TIME_ZONE: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: ""
+    volumes:
+      - /nuoyis-service/web/mariadb/init/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - /nuoyis-service/web/mariadb/server:/var/lib/mysql
+      - /nuoyis-service/web/mariadb/import:/nuoyis-web/mariadb/import
+      - /nuoyis-service/web/mariadb/config/my.cnf:/etc/mysql/my.cnf
+    ports:
+      - 3306:3306
+    healthcheck:
+      test: ["CMD", "sh", "-c", "mariadb -u root -p$$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM information_schema.tables LIMIT 1;'"]
+      interval: 30s
+      retries: 3
+      start_period: 10s
+      timeout: 10s
+    restart: always
+  nuoyis-lnmp-autoheal:
+    container_name: nuoyis-lnmp-autoheal
+    image: willfarrell/autoheal
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=all
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+networks:
+  nuoyis-net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.223.0/24
+          gateway: 192.168.223.1
+EOF
+    docker-compose up -d
     	fi
 	else
 		nuoyis_install_manger install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
@@ -573,34 +697,31 @@ nuoyis_docker_install(){
 		sed -i 's+$releasever+8+'  /etc/yum.repos.d/docker-ce.repo
 	fi
 	nuoyis_install_manger makecache
-	nuoyis_install_manger install docker-ce
+	nuoyis_install_manger install docker-ce docker-ce-cli container.io
 	mkdir -p /etc/docker
 	touch /etc/docker/daemon.json
 	cat > /etc/docker/daemon.json << EOF
 {
   "registry-mirrors": [
-    "https://hub.atomgit.com",
-    "https://2a6bf1988cb6428c877f723ec7530dbc.mirror.swr.myhuaweicloud.com",
-    "https://docker.m.daocloud.io",
+    "https://hub.nastool.de",
+    "https://docker.1ms.run",
+    "https://docker.1panel.live",
+    "https://docker.1panel.top",
     "https://hub-mirror.c.163.com",
     "https://mirror.baidubce.com",
-    "https://your_preferred_mirror",
     "https://dockerhub.icu",
-    "https://docker.registry.cyou",
-    "https://docker-cf.registry.cyou",
-    "https://dockercf.jsdelivr.fyi",
-    "https://docker.jsdelivr.fyi",
-    "https://dockertest.jsdelivr.fyi",
-    "https://mirror.aliyuncs.com",
+    "https://hub.rat.dev",
+    "https://docker.wanpeng.top",
+    "https://docker.mrxn.net",
+    "https://docker.anyhub.us.kg",
+    "https://dislabaiot.xyz",
+    "https://docker.fxxk.dedyn.io",
+    "https://docker-mirror.aigc2d.com",
+    "https://doublezonline.cloud",
     "https://dockerproxy.com",
-    "https://mirror.baidubce.com",
-    "https://docker.m.daocloud.io",
-    "https://docker.nju.edu.cn",
-    "https://docker.mirrors.sjtug.sjtu.edu.cn",
-    "https://docker.mirrors.ustc.edu.cn",
     "https://mirror.iscas.ac.cn",
-    "https://docker.rainbond.cc",
-    "https://docker66ccff.lovablewyh.eu.org"
+    "https://docker66ccff.lovablewyh.eu.org",
+    "https://docker.m.daocloud.io"
   ],
   "bip": "192.168.100.1/24",
   "default-address-pools": [
@@ -612,6 +733,7 @@ nuoyis_docker_install(){
 }
 EOF
 	nuoyis_systemctl_manger start docker
+	curl -L "https://gh.llkk.cc/https://github.com/docker/compose/releases/download/v2.32.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
 }
 
 # 源配置类
@@ -759,7 +881,7 @@ EOF
 			fi
 
 			rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
-			nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://shell.nuoyis.net/download/elrepo-release-9.1-1.el9.elrepo.noarch.rpm https://shell.nuoyis.net/download/remi-release-9.rpm
+			nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://mirrors.cernet.edu.cn/elrepo/elrepo/el9/x86_64/RPMS/elrepo-release-9.0-1.el9.elrepo.noarch.rpm https://shell.nuoyis.net/download/remi-release-9.rpm
 			sudo sed -e 's!^metalink=!#metalink=!g' \
 			-e 's!^#baseurl=!baseurl=!g' \
 			-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
@@ -770,7 +892,10 @@ EOF
 			-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
 			-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
 			-i  /etc/yum.repos.d/remi*
-			sed -i 's#elrepo.org/linux#mirrors.bfsu.edu.cn/elrepo#g' /etc/yum.repos.d/elrepo.repo
+			sed -e 's/http:\/\/elrepo.org\/linux/https:\/\/mirrors.aliyun.com\/elrepo/g' \
+			    -e 's/mirrorlist=/#mirrorlist=/g' \
+				-e 's/gpgcheck=1/gpgcheck=0/g' \
+				-i /etc/yum.repos.d/elrepo.repo
 		else
 			sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
 		fi
@@ -823,52 +948,10 @@ EOF
 			sudo efibootmgr --create --disk "/dev/$diskname" --part $efi_disknumber --label "nuoyis-redhat Linux" --loader "\EFI\rocky\shimx64.efi"
 			sudo grub2-mkconfig -o /boot/efi/EFI/rocky/grub.cfg
 		fi
-		
-		# # if [ -d `whereis openssl | cut -d : -f 2 | awk '{print $1}'` ];then
-		# # 	nuoyis_openssl=`whereis openssl | cut -d : -f 2 | awk '{print $1}'`
-		# # fi
-		# rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
-		# nuoyis_download_manager https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
-		# nuoyis_download_manager https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		# rpm -ivh --force --nodeps openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		# rpm -ivh --force --nodeps openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
-		# rm -rf openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
-		# install_dir="/nuoyis-server/openssl/3.3.1"
-		# mkdir -p $install_dir
-		# nuoyis_install_manger install gcc gcc-c++ zlib-devel libtool autoconf automake perl perl-IPC-Cmd perl-Data-Dumper perl-CPAN
-		# nuoyis_download_manager https://shell.nuoyis.net/download/openssl-3.3.1.tar.gz
-		# tar -xzvf openssl-3.3.1.tar.gz openssl-3.3.1/
-		# ./openssl-3.3.1/config --prefix=${install_dir} shared zlib-dynamic enable-ec_nistp_64_gcc_128 enable-ssl3 enable-ssl3-method enable-mdc2 enable-md2
-		# make -j$(nproc) && make install_sw
-		# # mv -f ./openssl-3.3.1/* /nuoyis-server/openssl/ &> /dev/null
-		# # nuoyis_openssl="/nuoyis-server/openssl/"
-		# rm -rf ./openssl-3.3.1
-		# rm -rf ./openssl-3.3.1.tar.gz
-		# # fi;
-		# # rpm -e --nodeps openssl
-		# echo "exclude=openssh* openssl openssl-lib" >> /etc/yum.conf
-
-		# ln -sf $install_dir/lib64/libcrypto.so.3 /usr/lib64/libcrypto.so.3
-		# ln -sf $install_dir/lib64/libssl.so.3 /usr/lib64/libssl.so.3
-
-		# ldd ${install_dir}/bin/openssl
-
-		# mv -f /usr/bin/openssl /usr/lib64/openssl.old
-		# mv -f 
-
-		# ln -sf $install_dir/bin/openssl /usr/bin/openssl
-		# ln -sf $install_dir/include/openssl /usr/include/openssl
-		
-		# echo "export PATH=\$PATH:${install_dir}/bin" >> /etc/profile
-		# echo "export LD_LIBRARY_PATH="${install_dir}/lib:\$LD_LIBRARY_PATH"" >> /etc/profile
-		# source /etc/profile
-
-		# echo "$install_dir/lib" > /etc/ld.so.conf.d/openssl-3.3.1.conf
-		# ldconfig
-		# dnf config-manager --set-enabled crb -y
 	fi
 
 	echo "正在更新源"
+	rm -rf /etc/yum.repods.d/*.rpmsave
 	nuoyis_install_manger clean
 	nuoyis_install_manger update                              
 	nuoyis_install_manger makecache
@@ -1052,9 +1135,13 @@ else
 	else
 		read -p "附加项:是否安装LNMP环境(y/n):" nuoyis_lnmp
 		if [ $nuoyis_lnmp == "y" ];then
-			read -p "请输入是快速安装(y)还是编译安装(n):" nuoyis_lnmp_install_yn
+			read -p "请输入是1.快速安装 2.编译安装 3.容器安装 (请输入数字):" nuoyis_lnmp_install_yn
+			if [ $nuoyis_lnmp_install_yn == "3" ];then
+			  echo "会自动安装docker-compose和docker，无需额外输入选项"
+			else
+			   read -p "附加项:是否安装Docker(y/n):" nuoyis_docker
+			fi
 		fi
-		read -p "附加项:是否安装Docker(y/n):" nuoyis_docker
 	fi
 fi
 
