@@ -8,6 +8,8 @@ CIDR="10.104.43"
 gateway="10.104.0.1"
 dns="223.5.5.5"
 
+mkdir /nuoyis-install
+cd /nuoyis-install
 #自动获取变量区域
 startTime=`date +%Y%m%d-%H:%M:%S`
 startTime_s=`date +%s`
@@ -376,6 +378,7 @@ nuoyis_lnmp_install(){
 	echo "正在测试中，请晚些时候再执行"
 	sleep 30
 	if [ $PM = "yum" ];then
+	    if [ $nuoyis_lnmp_install_yn -ne "3" ];then
 		nuoyis_install_manger install pcre pcre-devel zlib zlib-devel libxml2 libxml2-devel readline readline-devel ncurses ncerses-devel perl-devel perl-ExtUtils-Embed
 		aboutserver=`systemctl is-active firewalld`
 		if [ $aboutserver == "inactive" ];then
@@ -385,6 +388,7 @@ nuoyis_lnmp_install(){
 		firewall-cmd --zone=public --add-service=http --per
 		firewall-cmd --zone=public --add-port=3306/tcp --per
 		firewall-cmd --reload
+		fi
 		if [ $nuoyis_lnmp_install_yn = "1" ];then
 			# 快速安装
 			yes | dnf module reset php
@@ -610,11 +614,14 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 		nuoyis_systemctl_manger start nginx
+
 		else
 		   mkdir -p /nuoyis-service/web/{nginx/{conf,webside,ssl},mariadb/{init,server,import,config}}
            nuoyis_docker_install
+		   useradd -M -s /sbin/nologin nuoyis-web
+		   read -p "请输入mariadb root密码:" nuoyis_docker_install_mariadb
 		   cat > docker-compose.yaml << EOF
-version: '2.32.2'
+version: '2.2.2'
 services:
   nuoyis-lnmp-np:
     container_name: nuoyis-lnmp-np
@@ -636,6 +643,7 @@ services:
       retries: 3
       start_period: 10s
       timeout: 10s
+    user: "\${SUID}:\${SGID}"
     restart: always
   nuoyis-lnmp-mariadb:
     container_name: nuoyis-lnmp-mariadb
@@ -646,7 +654,7 @@ services:
           - nuoyis-mariadb
     environment:
       TIME_ZONE: Asia/Shanghai
-      MYSQL_ROOT_PASSWORD: ""
+      MYSQL_ROOT_PASSWORD: "$nuoyis_docker_install_mariadb"
     volumes:
       - /nuoyis-service/web/mariadb/init/init.sql:/docker-entrypoint-initdb.d/init.sql
       - /nuoyis-service/web/mariadb/server:/var/lib/mysql
@@ -655,7 +663,7 @@ services:
     ports:
       - 3306:3306
     healthcheck:
-      test: ["CMD", "sh", "-c", "mariadb -u root -p$$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM information_schema.tables LIMIT 1;'"]
+      test: ["CMD", "sh", "-c", "mariadb -u root -p$\$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM information_schema.tables LIMIT 1;'"]
       interval: 30s
       retries: 3
       start_period: 10s
@@ -678,6 +686,16 @@ networks:
         - subnet: 192.168.223.0/24
           gateway: 192.168.223.1
 EOF
+cat > /nuoyis-service/web/mariadb/config/my.cnf << EOF
+[mysqld]
+server-id=1
+log_bin=mysql-bin
+binlog_format=ROW
+slave_skip_errors=1062
+EOF
+    docker rm -f nuoyis-lnmp-np
+	docker rm -f nuoyis-lnmp-mariadb
+	docker rm -f nuoyis-lnmp-autoheal
     docker-compose up -d
     	fi
 	else
@@ -697,7 +715,7 @@ nuoyis_docker_install(){
 		sed -i 's+$releasever+8+'  /etc/yum.repos.d/docker-ce.repo
 	fi
 	nuoyis_install_manger makecache
-	nuoyis_install_manger install docker-ce docker-ce-cli container.io
+	nuoyis_install_manger install docker-ce docker-ce-cli container.io docker-compose-plugin
 	mkdir -p /etc/docker
 	touch /etc/docker/daemon.json
 	cat > /etc/docker/daemon.json << EOF
@@ -733,7 +751,7 @@ nuoyis_docker_install(){
 }
 EOF
 	nuoyis_systemctl_manger start docker
-	curl -L "https://gh.llkk.cc/https://github.com/docker/compose/releases/download/v2.32.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
+	curl -L "https://hub.gitmirror.com/https://github.com/docker/compose/releases/download/v2.32.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
 }
 
 # 源配置类
@@ -881,21 +899,21 @@ EOF
 			fi
 
 			rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
-			nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://mirrors.cernet.edu.cn/elrepo/elrepo/el9/x86_64/RPMS/elrepo-release-9.0-1.el9.elrepo.noarch.rpm https://shell.nuoyis.net/download/remi-release-9.rpm
-			sudo sed -e 's!^metalink=!#metalink=!g' \
+			nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://mirrors.cernet.edu.cn/elrepo/elrepo/el9/x86_64/RPMS/elrepo-release-9.0-1.el9.elrepo.noarch.rpm
+			sed -e 's!^metalink=!#metalink=!g' \
 			-e 's!^#baseurl=!baseurl=!g' \
 			-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
 			-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
 			-i /etc/yum.repos.d/epel{,-testing}.repo
-			sed -i 's/mirrorlist=/#mirrorlist=/g' /etc/yum.repos.d/elrepo.repo
-			sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-			-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-			-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-			-i  /etc/yum.repos.d/remi*
 			sed -e 's/http:\/\/elrepo.org\/linux/https:\/\/mirrors.aliyun.com\/elrepo/g' \
 			    -e 's/mirrorlist=/#mirrorlist=/g' \
 				-e 's/gpgcheck=1/gpgcheck=0/g' \
 				-i /etc/yum.repos.d/elrepo.repo
+			nuoyis_install_manger install https://shell.nuoyis.net/download/remi-release-9.rpm
+			sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+			-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+			-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+			-i  /etc/yum.repos.d/remi*.repo
 		else
 			sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
 		fi
@@ -1137,17 +1155,19 @@ else
 		echo -e "\e[31m\e[1m注意:建议局域网使用，NAS系统安装vsftpd,lnmp环境,docker环境以及samba.目录将配置为:/nuoyis-server/sharefile\e[0m"
 		read -p "请按任意键继续" nuoyis_go
 		nuoyis_lnmp=y
-		nuoyis_lnmp_install_yn=n
+		nuoyis_lnmp_install_yn=2
 		nuoyis_docker=y
 	else
 		read -p "附加项:是否安装LNMP环境(y/n):" nuoyis_lnmp
 		if [ $nuoyis_lnmp == "y" ];then
 			read -p "请输入是1.快速安装 2.编译安装 3.容器安装 (请输入数字):" nuoyis_lnmp_install_yn
-			if [ $nuoyis_lnmp_install_yn == "3" ];then
-			  echo "会自动安装docker-compose和docker，无需额外输入选项"
-			else
-			   read -p "附加项:是否安装Docker(y/n):" nuoyis_docker
-			fi
+		else
+		    nuoyis_lnmp_install_yn=0
+		fi
+		if [ $nuoyis_lnmp_install_yn -ne "3" ];then
+			read -p "附加项:是否安装Docker(y/n):" nuoyis_docker
+		else
+		    nuoyis_docker=n
 		fi
 	fi
 fi
@@ -1174,8 +1194,7 @@ nuoyis_source_installer
 echo "系统优化类"
 
 echo "配置基础系统文件"
-nuoyis_install_manger install dnf-plugins-core python3 pip bash* vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils
-
+nuoyis_install_manger install dnf-plugins-core python3 pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils
 
 # 来自https://www.rockylinux.cn
 
@@ -1262,5 +1281,6 @@ sumTime=$[ $endTime_s - $startTime_s ]
 
 # 时间统计作者链接：https://blog.csdn.net/bandaoyu/article/details/115525067
 echo "执行完毕，执行时长:$sumTime seconds"                 
-
+cd
+rm -rf /nuoyis-install
 echo "安装完毕，向前出发吧"
