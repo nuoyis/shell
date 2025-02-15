@@ -8,8 +8,6 @@ CIDR="10.104.43"
 gateway="10.104.0.1"
 dns="223.5.5.5"
 
-mkdir /nuoyis-install
-cd /nuoyis-install
 #自动获取变量区域
 startTime=`date +%Y%m%d-%H:%M:%S`
 startTime_s=`date +%s`
@@ -496,8 +494,8 @@ nuoyis_lnmp_install(){
 			# nuoyis_download_manager 
 			# ./configure --prefix=/$auth-server/php/server --sysconfdir=/$auth-server/php/conf --with-openssl --with-zlib --with-bz2 --with-curl --enable-bcmath --enable-gd --with-webp --with-jpeg --with-mhash --enable-mbstring --with-imap-ssl --with-mysqli --enable-exif --with-ffi --with-zip --enable-sockets --with-pcre-jit --enable-fpm --with-pdo-mysql --enable-pcntl
 			touch /$auth-server/logs/nginx/{error.log,nginx.pid}
-			rm -rf ./nginx-1.27.0
-			rm -rf ./nginx-1.27.0.tar.gz
+			# rm -rf ./nginx-1.27.0
+			# rm -rf ./nginx-1.27.0.tar.gz
 			cat > /$auth-server/nginx/server/conf/nginx.conf << EOF
 	worker_processes  1;
 
@@ -616,11 +614,11 @@ EOF
 		nuoyis_systemctl_manger start nginx
 
 		else
-		   mkdir -p /nuoyis-service/web/{nginx/{conf,webside,ssl},mariadb/{init,server,import,config}}
+		   mkdir -p /nuoyis-server/web/{docker-yaml,nginx/{conf,webside/default,ssl},mariadb/{init,server,import,config}}
            nuoyis_docker_install
 		   useradd -M -s /sbin/nologin nuoyis-web
 		   read -p "请输入mariadb root密码:" nuoyis_docker_install_mariadb
-		   cat > docker-compose.yaml << EOF
+		   cat > /nuoyis-server/web/docker-compose.yaml << EOF
 version: '2.2.2'
 services:
   nuoyis-lnmp-np:
@@ -634,9 +632,9 @@ services:
       - 80:80
       - 443:443
     volumes:
-      - /nuoyis-service/web/nginx/conf:/nuoyis-web/nginx/conf
-      - /nuoyis-service/web/nginx/webside:/nuoyis-web/nginx/webside
-      - /nuoyis-service/web/nginx/ssl:/nuoyis-web/nginx/ssl
+      - /nuoyis-server/web/nginx/conf:/nuoyis-web/nginx/conf
+      - /nuoyis-server/web/nginx/webside:/nuoyis-web/nginx/webside
+      - /nuoyis-server/web/nginx/ssl:/nuoyis-web/nginx/ssl
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost"]
       interval: 30s
@@ -656,10 +654,10 @@ services:
       TIME_ZONE: Asia/Shanghai
       MYSQL_ROOT_PASSWORD: "$nuoyis_docker_install_mariadb"
     volumes:
-      - /nuoyis-service/web/mariadb/init/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - /nuoyis-service/web/mariadb/server:/var/lib/mysql
-      - /nuoyis-service/web/mariadb/import:/nuoyis-web/mariadb/import
-      - /nuoyis-service/web/mariadb/config/my.cnf:/etc/mysql/my.cnf
+      - /nuoyis-server/web/mariadb/init/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - /nuoyis-server/web/mariadb/server:/var/lib/mysql
+      - /nuoyis-server/web/mariadb/import:/nuoyis-web/mariadb/import
+      - /nuoyis-server/web/mariadb/config/my.cnf:/etc/mysql/my.cnf
     ports:
       - 3306:3306
     healthcheck:
@@ -686,7 +684,10 @@ networks:
         - subnet: 192.168.223.0/24
           gateway: 192.168.223.1
 EOF
-cat > /nuoyis-service/web/mariadb/config/my.cnf << EOF
+cat > /nuoyis-server/web/nginx/webside/default/index.html << EOF
+welcome to nuoyis's server
+EOF
+cat > /nuoyis-server/web/mariadb/config/my.cnf << EOF
 [mysqld]
 server-id=1
 log_bin=mysql-bin
@@ -696,7 +697,7 @@ EOF
     docker rm -f nuoyis-lnmp-np
 	docker rm -f nuoyis-lnmp-mariadb
 	docker rm -f nuoyis-lnmp-autoheal
-    docker-compose up -d
+    docker-compose -f /nuoyis-server/web/docker-compose.yaml up -d
     	fi
 	else
 		nuoyis_install_manger install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
@@ -981,26 +982,30 @@ EOF
 
 echo -e "=================================================================="
 echo -e "     诺依阁服务器初始化脚本V4.0"
-echo -e "     更新时间:2024.10.20"
+echo -e "     更新时间:2025.02.15"
 echo -e "     博客地址:https://blog.nuoyis.net"
 echo -e "     \e[31m\e[1m注意1:执行本脚本即同意作者方不承担执行脚本的后果 \e[0m"
 echo -e "     \e[31m\e[1m注意2:当前脚本pid为$$,如果卡死请执行kill -9 $$ \e[0m"
 echo -e "=================================================================="
 # 获取命令行参数
-nuoyis_nuoyis_go=$1
+nuoyis_go=$1
 nuoyis_yum_install=$2
 nuoyis_bt=$3
 nuoyis_nas_go=$4
 nuoyis_lnmp=$5
 nuoyis_lnmp_install_yn=$6
 nuoyis_docker_install=$7
-if [ -z "$nuoyis_nuoyis_go" ];then
+if [ -z "$nuoyis_go" ];then
    read -p "是否继续执行(y/n):" nuoyis_go
 fi
 if [ $nuoyis_go == "n" ];then
         echo "正在退出脚本"
         exit 0
 fi
+
+echo "创建临时文件夹"
+mkdir -p /nuoyis-install
+cd /nuoyis-install
 
 echo "检测是否是root用户"
 if [ $whois != "root" ];then
