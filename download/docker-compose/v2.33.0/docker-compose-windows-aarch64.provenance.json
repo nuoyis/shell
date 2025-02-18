@@ -1,0 +1,1192 @@
+{
+  "_type": "https://in-toto.io/Statement/v0.1",
+  "predicateType": "https://slsa.dev/provenance/v0.2",
+  "subject": [
+    {
+      "name": "docker-compose-windows-aarch64.exe",
+      "digest": {
+        "sha256": "6a03db6ecd49eb5a6edbeb33201beea41a88dc31560135c469587a2533cc9df0"
+      }
+    }
+  ],
+  "predicate": {
+    "builder": {
+      "id": "https://github.com/docker/compose/actions/runs/13280109488/attempts/1"
+    },
+    "buildType": "https://mobyproject.org/buildkit@v1",
+    "materials": [
+      {
+        "uri": "pkg:docker/crazymax/osxcross@11.3-alpine?platform=windows%2Farm64",
+        "digest": {
+          "sha256": "a5bd09128beabccdbe54715125ead9bb0aba7f73b58317343030d34fafd59ea3"
+        }
+      },
+      {
+        "uri": "pkg:docker/docker/buildkit-syft-scanner@stable-1",
+        "digest": {
+          "sha256": "1f5d53d5f6c0e565f8809ba0d77a1cc02f62541028a23e35e75dc8ac7ec08bc6"
+        }
+      },
+      {
+        "uri": "pkg:docker/docker/dockerfile@1",
+        "digest": {
+          "sha256": "93bfd3b68c109427185cd78b4779fc82b484b0b7618e36d0f104d4d801e66d25"
+        }
+      },
+      {
+        "uri": "pkg:docker/alpine@latest?platform=linux%2Famd64",
+        "digest": {
+          "sha256": "56fa17d2a7e7f168a043a2712e63aed1f8543aeafdcee47c58dcffe38ed51099"
+        }
+      },
+      {
+        "uri": "pkg:docker/golang@1.22.10-alpine?platform=linux%2Famd64",
+        "digest": {
+          "sha256": "371d9fe4b716720eb5d955f7e50390d2adba92638fd8bd9ce05d336255485872"
+        }
+      },
+      {
+        "uri": "pkg:docker/tonistiigi/xx@1.6.1?platform=linux%2Famd64",
+        "digest": {
+          "sha256": "923441d7c25f1e2eb5789f82d987693c47b8ed987c4ab3b075d6ed2b5d6779a3"
+        }
+      }
+    ],
+    "invocation": {
+      "configSource": {
+        "entryPoint": "Dockerfile"
+      },
+      "parameters": {
+        "frontend": "gateway.v0",
+        "args": {
+          "build-arg:BUILDKIT_CONTEXT_KEEP_GIT_DIR": "1",
+          "build-arg:BUILD_TAGS": "e2e",
+          "cmdline": "docker/dockerfile:1",
+          "source": "docker/dockerfile:1",
+          "target": "release"
+        },
+        "locals": [
+          {
+            "name": "context"
+          },
+          {
+            "name": "dockerfile"
+          }
+        ]
+      },
+      "environment": {
+        "platform": "linux/amd64"
+      }
+    },
+    "buildConfig": {
+      "llbDefinition": [
+        {
+          "id": "step0",
+          "op": {
+            "Op": {
+              "source": {
+                "identifier": "docker-image://docker.io/library/alpine:latest@sha256:56fa17d2a7e7f168a043a2712e63aed1f8543aeafdcee47c58dcffe38ed51099"
+              }
+            },
+            "platform": {
+              "Architecture": "amd64",
+              "OS": "linux"
+            },
+            "constraints": {}
+          }
+        },
+        {
+          "id": "step1",
+          "op": {
+            "Op": {
+              "file": {
+                "actions": [
+                  {
+                    "input": 0,
+                    "secondaryInput": -1,
+                    "output": 0,
+                    "Action": {
+                      "mkdir": {
+                        "path": "/work",
+                        "mode": 493,
+                        "makeParents": true,
+                        "timestamp": -1
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "constraints": {}
+          },
+          "inputs": [
+            "step0:0"
+          ]
+        },
+        {
+          "id": "step2",
+          "op": {
+            "Op": {
+              "source": {
+                "identifier": "docker-image://docker.io/library/golang:1.22.10-alpine@sha256:371d9fe4b716720eb5d955f7e50390d2adba92638fd8bd9ce05d336255485872"
+              }
+            },
+            "platform": {
+              "Architecture": "amd64",
+              "OS": "linux"
+            },
+            "constraints": {}
+          }
+        },
+        {
+          "id": "step3",
+          "op": {
+            "Op": {
+              "source": {
+                "identifier": "docker-image://docker.io/tonistiigi/xx:1.6.1@sha256:923441d7c25f1e2eb5789f82d987693c47b8ed987c4ab3b075d6ed2b5d6779a3"
+              }
+            },
+            "platform": {
+              "Architecture": "amd64",
+              "OS": "linux"
+            },
+            "constraints": {}
+          }
+        },
+        {
+          "id": "step4",
+          "op": {
+            "Op": {
+              "file": {
+                "actions": [
+                  {
+                    "input": 0,
+                    "secondaryInput": 1,
+                    "output": 0,
+                    "Action": {
+                      "copy": {
+                        "src": "/",
+                        "dest": "/",
+                        "mode": -1,
+                        "followSymlink": true,
+                        "dirCopyContents": true,
+                        "createDestPath": true,
+                        "allowWildcard": true,
+                        "allowEmptyWildcard": true,
+                        "timestamp": -1
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "constraints": {}
+          },
+          "inputs": [
+            "step2:0",
+            "step3:0"
+          ]
+        },
+        {
+          "id": "step5",
+          "op": {
+            "Op": {
+              "exec": {
+                "meta": {
+                  "args": [
+                    "/bin/sh",
+                    "-c",
+                    "apk add --no-cache       clang       docker       file       findutils       git       make       protoc       protobuf-dev"
+                  ],
+                  "env": [
+                    "PATH=/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "GOLANG_VERSION=1.22.10",
+                    "GOTOOLCHAIN=local",
+                    "GOPATH=/go"
+                  ],
+                  "cwd": "/go",
+                  "removeMountStubsRecursive": true
+                },
+                "mounts": [
+                  {
+                    "dest": "/"
+                  }
+                ]
+              }
+            },
+            "platform": {
+              "Architecture": "amd64",
+              "OS": "linux"
+            },
+            "constraints": {}
+          },
+          "inputs": [
+            "step4:0"
+          ]
+        },
+        {
+          "id": "step6",
+          "op": {
+            "Op": {
+              "file": {
+                "actions": [
+                  {
+                    "input": 0,
+                    "secondaryInput": -1,
+                    "output": 0,
+                    "Action": {
+                      "mkdir": {
+                        "path": "/src",
+                        "mode": 493,
+                        "makeParents": true,
+                        "timestamp": -1
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "constraints": {}
+          },
+          "inputs": [
+            "step5:0"
+          ]
+        },
+        {
+          "id": "step7",
+          "op": {
+            "Op": {
+              "source": {
+                "identifier": "local://context",
+                "attrs": {
+                  "local.excludepatterns": "[\"bin\"]",
+                  "local.sharedkeyhint": "context"
+                }
+              }
+            },
+            "constraints": {}
+          }
+        },
+        {
+          "id": "step8",
+          "op": {
+            "Op": {
+              "file": {
+                "actions": [
+                  {
+                    "input": 0,
+                    "secondaryInput": 1,
+                    "output": 0,
+                    "Action": {
+                      "copy": {
+                        "src": "/go.*",
+                        "dest": "/src/",
+                        "mode": -1,
+                        "followSymlink": true,
+                        "dirCopyContents": true,
+                        "createDestPath": true,
+                        "allowWildcard": true,
+                        "allowEmptyWildcard": true,
+                        "timestamp": -1
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "constraints": {}
+          },
+          "inputs": [
+            "step6:0",
+            "step7:0"
+          ]
+        },
+        {
+          "id": "step9",
+          "op": {
+            "Op": {
+              "exec": {
+                "meta": {
+                  "args": [
+                    "/bin/sh",
+                    "-c",
+                    "go mod download"
+                  ],
+                  "env": [
+                    "PATH=/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "GOLANG_VERSION=1.22.10",
+                    "GOTOOLCHAIN=local",
+                    "GOPATH=/go",
+                    "CGO_ENABLED=0"
+                  ],
+                  "cwd": "/src",
+                  "removeMountStubsRecursive": true
+                },
+                "mounts": [
+                  {
+                    "dest": "/"
+                  },
+                  {
+                    "input": -1,
+                    "dest": "/go/pkg/mod",
+                    "output": -1,
+                    "mountType": 3,
+                    "cacheOpt": {
+                      "ID": "//go/pkg/mod"
+                    }
+                  },
+                  {
+                    "input": -1,
+                    "dest": "/root/.cache/go-build",
+                    "output": -1,
+                    "mountType": 3,
+                    "cacheOpt": {
+                      "ID": "//root/.cache/go-build"
+                    }
+                  }
+                ]
+              }
+            },
+            "platform": {
+              "Architecture": "amd64",
+              "OS": "linux"
+            },
+            "constraints": {}
+          },
+          "inputs": [
+            "step8:0"
+          ]
+        },
+        {
+          "id": "step10",
+          "op": {
+            "Op": {
+              "source": {
+                "identifier": "docker-image://docker.io/crazymax/osxcross:11.3-alpine@sha256:a5bd09128beabccdbe54715125ead9bb0aba7f73b58317343030d34fafd59ea3"
+              }
+            },
+            "platform": {
+              "Architecture": "arm64",
+              "OS": "windows"
+            },
+            "constraints": {}
+          }
+        },
+        {
+          "id": "step11",
+          "op": {
+            "Op": {
+              "exec": {
+                "meta": {
+                  "args": [
+                    "/bin/sh",
+                    "-c",
+                    "xx-go --wrap \u0026\u0026     if [ \"$(xx-info os)\" == \"darwin\" ]; then export CGO_ENABLED=1; fi \u0026\u0026     make build GO_BUILDTAGS=\"$BUILD_TAGS\" DESTDIR=/out \u0026\u0026     xx-verify --static /out/docker-compose"
+                  ],
+                  "env": [
+                    "PATH=/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "GOLANG_VERSION=1.22.10",
+                    "GOTOOLCHAIN=local",
+                    "GOPATH=/go",
+                    "CGO_ENABLED=0",
+                    "BUILD_TAGS=e2e",
+                    "TARGETPLATFORM=windows/arm64"
+                  ],
+                  "cwd": "/src",
+                  "removeMountStubsRecursive": true
+                },
+                "mounts": [
+                  {
+                    "dest": "/"
+                  },
+                  {
+                    "input": -1,
+                    "dest": "/go/pkg/mod",
+                    "output": -1,
+                    "mountType": 3,
+                    "cacheOpt": {
+                      "ID": "//go/pkg/mod"
+                    }
+                  },
+                  {
+                    "input": -1,
+                    "dest": "/root/.cache",
+                    "output": -1,
+                    "mountType": 3,
+                    "cacheOpt": {
+                      "ID": "//root/.cache"
+                    }
+                  },
+                  {
+                    "input": 1,
+                    "dest": "/src",
+                    "output": -1,
+                    "readonly": true
+                  },
+                  {
+                    "input": 2,
+                    "selector": "/osxsdk",
+                    "dest": "/xx-sdk",
+                    "output": -1,
+                    "readonly": true
+                  }
+                ]
+              }
+            },
+            "platform": {
+              "Architecture": "amd64",
+              "OS": "linux"
+            },
+            "constraints": {}
+          },
+          "inputs": [
+            "step9:0",
+            "step7:0",
+            "step10:0"
+          ]
+        },
+        {
+          "id": "step12",
+          "op": {
+            "Op": {
+              "file": {
+                "actions": [
+                  {
+                    "input": -1,
+                    "secondaryInput": 0,
+                    "output": 0,
+                    "Action": {
+                      "copy": {
+                        "src": "/out/docker-compose",
+                        "dest": "/docker-compose.exe",
+                        "mode": -1,
+                        "followSymlink": true,
+                        "dirCopyContents": true,
+                        "createDestPath": true,
+                        "allowWildcard": true,
+                        "allowEmptyWildcard": true,
+                        "timestamp": -1
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "constraints": {}
+          },
+          "inputs": [
+            "step11:0"
+          ]
+        },
+        {
+          "id": "step13",
+          "op": {
+            "Op": {
+              "exec": {
+                "meta": {
+                  "args": [
+                    "/bin/sh",
+                    "-c",
+                    "mkdir -p /out \u0026\u0026     TARGETARCH=$([ \"$TARGETARCH\" = \"amd64\" ] \u0026\u0026 echo \"x86_64\" || echo \"$TARGETARCH\");     TARGETARCH=$([ \"$TARGETARCH\" = \"arm64\" ] \u0026\u0026 echo \"aarch64\" || echo \"$TARGETARCH\");     cp docker-compose* \"/out/docker-compose-${TARGETOS}-${TARGETARCH}${TARGETVARIANT}$(ls docker-compose* | sed -e 's/^docker-compose//')\""
+                  ],
+                  "env": [
+                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "TARGETOS=windows",
+                    "TARGETARCH=arm64",
+                    "TARGETVARIANT="
+                  ],
+                  "cwd": "/work",
+                  "removeMountStubsRecursive": true
+                },
+                "mounts": [
+                  {
+                    "dest": "/"
+                  },
+                  {
+                    "input": 1,
+                    "dest": "/work",
+                    "output": -1,
+                    "readonly": true
+                  }
+                ]
+              }
+            },
+            "platform": {
+              "Architecture": "amd64",
+              "OS": "linux"
+            },
+            "constraints": {}
+          },
+          "inputs": [
+            "step1:0",
+            "step12:0"
+          ]
+        },
+        {
+          "id": "step14",
+          "op": {
+            "Op": {
+              "file": {
+                "actions": [
+                  {
+                    "input": -1,
+                    "secondaryInput": 0,
+                    "output": 0,
+                    "Action": {
+                      "copy": {
+                        "src": "/out",
+                        "dest": "/",
+                        "mode": -1,
+                        "followSymlink": true,
+                        "dirCopyContents": true,
+                        "createDestPath": true,
+                        "allowWildcard": true,
+                        "allowEmptyWildcard": true,
+                        "timestamp": -1
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "constraints": {}
+          },
+          "inputs": [
+            "step13:0"
+          ]
+        },
+        {
+          "id": "step15",
+          "op": {
+            "Op": {}
+          },
+          "inputs": [
+            "step14:0"
+          ]
+        }
+      ],
+      "digestMapping": {
+        "sha256:0a15bef6f4ee04611d61f94bcb25c32f2d40e01dbea9adb821ddeceb574267ab": "step8",
+        "sha256:2de5a027d794f90967be94d824ba5b812d9e9e366c5ee33051f19d6c935266c7": "step0",
+        "sha256:341cd1449fa57e558cca4276030a3bf46d7baa5c50f228beb6ac75f602440d32": "step11",
+        "sha256:3efd68d6dc6376c9abc01945addd84fcc4960b8eacc06ecf3c578d3aedc26782": "step15",
+        "sha256:4e83817820069e786ef2ede737fa5e74f56c000d4153c6c78cc1c14088b28b27": "step10",
+        "sha256:4fe788dee91f0388f86508412e5921e27b2d0bc794072f94a3ed0567b17b2df5": "step13",
+        "sha256:6dfb06d9f34811fbc284d2f6ad70a099011641cd4c5cee2b15c489665641131a": "step5",
+        "sha256:78c40a88d11844fcc18b9d0e3816d6654b80882d78d849825573e309972d0f2c": "step6",
+        "sha256:7f972a2790d2ecf256c95a8a91af7ad9553aa2b88363e2964620b8af295369b1": "step12",
+        "sha256:8f26d908b3779f5aa2dfeda6ee00a4a081ec07d2650b6ef20cd27564eb28d909": "step14",
+        "sha256:b85ac262ad614ccde44b89bfc0770ef0ad0126c4395462a65e83d22ef785ef20": "step9",
+        "sha256:bcd722273d7e261e6a9f6c15bf6209b71e969f02894c9ae4fb661acf93c02c3d": "step4",
+        "sha256:d5371025f5b954764d8b983d764ec85e7de231d56a236ca3e5a9502d0e7085a0": "step1",
+        "sha256:e450d1d6da65477a675d51087a2c9b326dc14b0cbe2658f449c9b8426c6be022": "step7",
+        "sha256:f88fc0bf6c422295a1b44ad1c8b87c95d9b71e2bfeb643e25d0236c8f75e87e3": "step3",
+        "sha256:fed5c182bab94d2614ddc1a931cdd5cb3e8c38fa2bbffc9ad5867452906c1c42": "step2"
+      }
+    },
+    "metadata": {
+      "buildInvocationID": "ywmg383xqlugkl4a8ame54ni1",
+      "buildStartedOn": "2025-02-12T07:20:40.33664043Z",
+      "buildFinishedOn": "2025-02-12T07:22:21.783857754Z",
+      "completeness": {
+        "parameters": true,
+        "environment": true,
+        "materials": false
+      },
+      "reproducible": false,
+      "https://mobyproject.org/buildkit@v1#metadata": {
+        "vcs": {
+          "localdir:context": ".",
+          "localdir:dockerfile": ".",
+          "revision": "036da47950e2b91f96d7c3331ff110651064687c",
+          "source": "https://github.com/docker/compose"
+        },
+        "source": {
+          "locations": {
+            "step0": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 184
+                      },
+                      "end": {
+                        "line": 184
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step1": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 185
+                      },
+                      "end": {
+                        "line": 185
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step10": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 31
+                      },
+                      "end": {
+                        "line": 31
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step11": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 81
+                      },
+                      "end": {
+                        "line": 81
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 82
+                      },
+                      "end": {
+                        "line": 82
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 83
+                      },
+                      "end": {
+                        "line": 83
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 84
+                      },
+                      "end": {
+                        "line": 84
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 85
+                      },
+                      "end": {
+                        "line": 85
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 86
+                      },
+                      "end": {
+                        "line": 86
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 87
+                      },
+                      "end": {
+                        "line": 87
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 88
+                      },
+                      "end": {
+                        "line": 88
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step12": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 179
+                      },
+                      "end": {
+                        "line": 179
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step13": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 189
+                      },
+                      "end": {
+                        "line": 189
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 190
+                      },
+                      "end": {
+                        "line": 190
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 191
+                      },
+                      "end": {
+                        "line": 191
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 192
+                      },
+                      "end": {
+                        "line": 192
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 193
+                      },
+                      "end": {
+                        "line": 193
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 194
+                      },
+                      "end": {
+                        "line": 194
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step14": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 197
+                      },
+                      "end": {
+                        "line": 197
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step2": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 36
+                      },
+                      "end": {
+                        "line": 36
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step3": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 28
+                      },
+                      "end": {
+                        "line": 28
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step4": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 37
+                      },
+                      "end": {
+                        "line": 37
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step5": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 38
+                      },
+                      "end": {
+                        "line": 38
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 39
+                      },
+                      "end": {
+                        "line": 39
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 40
+                      },
+                      "end": {
+                        "line": 40
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 41
+                      },
+                      "end": {
+                        "line": 41
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 42
+                      },
+                      "end": {
+                        "line": 42
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 43
+                      },
+                      "end": {
+                        "line": 43
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 44
+                      },
+                      "end": {
+                        "line": 44
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 45
+                      },
+                      "end": {
+                        "line": 45
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 46
+                      },
+                      "end": {
+                        "line": 46
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step6": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 47
+                      },
+                      "end": {
+                        "line": 47
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step7": {},
+            "step8": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 51
+                      },
+                      "end": {
+                        "line": 51
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "step9": {
+              "locations": [
+                {
+                  "ranges": [
+                    {
+                      "start": {
+                        "line": 52
+                      },
+                      "end": {
+                        "line": 52
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 53
+                      },
+                      "end": {
+                        "line": 53
+                      }
+                    },
+                    {
+                      "start": {
+                        "line": 54
+                      },
+                      "end": {
+                        "line": 54
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "infos": [
+            {
+              "filename": "Dockerfile",
+              "language": "Dockerfile",
+              "data": "IyBzeW50YXg9ZG9ja2VyL2RvY2tlcmZpbGU6MQoKCiMgICBDb3B5cmlnaHQgMjAyMCBEb2NrZXIgQ29tcG9zZSBDTEkgYXV0aG9ycwoKIyAgIExpY2Vuc2VkIHVuZGVyIHRoZSBBcGFjaGUgTGljZW5zZSwgVmVyc2lvbiAyLjAgKHRoZSAiTGljZW5zZSIpOwojICAgeW91IG1heSBub3QgdXNlIHRoaXMgZmlsZSBleGNlcHQgaW4gY29tcGxpYW5jZSB3aXRoIHRoZSBMaWNlbnNlLgojICAgWW91IG1heSBvYnRhaW4gYSBjb3B5IG9mIHRoZSBMaWNlbnNlIGF0CgojICAgICAgIGh0dHA6Ly93d3cuYXBhY2hlLm9yZy9saWNlbnNlcy9MSUNFTlNFLTIuMAoKIyAgIFVubGVzcyByZXF1aXJlZCBieSBhcHBsaWNhYmxlIGxhdyBvciBhZ3JlZWQgdG8gaW4gd3JpdGluZywgc29mdHdhcmUKIyAgIGRpc3RyaWJ1dGVkIHVuZGVyIHRoZSBMaWNlbnNlIGlzIGRpc3RyaWJ1dGVkIG9uIGFuICJBUyBJUyIgQkFTSVMsCiMgICBXSVRIT1VUIFdBUlJBTlRJRVMgT1IgQ09ORElUSU9OUyBPRiBBTlkgS0lORCwgZWl0aGVyIGV4cHJlc3Mgb3IgaW1wbGllZC4KIyAgIFNlZSB0aGUgTGljZW5zZSBmb3IgdGhlIHNwZWNpZmljIGxhbmd1YWdlIGdvdmVybmluZyBwZXJtaXNzaW9ucyBhbmQKIyAgIGxpbWl0YXRpb25zIHVuZGVyIHRoZSBMaWNlbnNlLgoKQVJHIEdPX1ZFUlNJT049MS4yMi4xMApBUkcgWFhfVkVSU0lPTj0xLjYuMQpBUkcgR09MQU5HQ0lfTElOVF9WRVJTSU9OPXYxLjYzLjQKQVJHIEFERExJQ0VOU0VfVkVSU0lPTj12MS4wLjAKCkFSRyBCVUlMRF9UQUdTPSJlMmUiCkFSRyBET0NTX0ZPUk1BVFM9Im1kLHlhbWwiCkFSRyBMSUNFTlNFX0ZJTEVTPSIuKlwoRG9ja2VyZmlsZVx8TWFrZWZpbGVcfFwuZ29cfFwuaGNsXHxcLnNoXCkiCgojIHh4IGlzIGEgaGVscGVyIGZvciBjcm9zcy1jb21waWxhdGlvbgpGUk9NIC0tcGxhdGZvcm09JHtCVUlMRFBMQVRGT1JNfSB0b25pc3RpaWdpL3h4OiR7WFhfVkVSU0lPTn0gQVMgeHgKCiMgb3N4Y3Jvc3MgY29udGFpbnMgdGhlIE1hY09TWCBjcm9zcyB0b29sY2hhaW4gZm9yIHh4CkZST00gY3JhenltYXgvb3N4Y3Jvc3M6MTEuMy1hbHBpbmUgQVMgb3N4Y3Jvc3MKCkZST00gZ29sYW5nY2kvZ29sYW5nY2ktbGludDoke0dPTEFOR0NJX0xJTlRfVkVSU0lPTn0tYWxwaW5lIEFTIGdvbGFuZ2NpLWxpbnQKRlJPTSBnaGNyLmlvL2dvb2dsZS9hZGRsaWNlbnNlOiR7QURETElDRU5TRV9WRVJTSU9OfSBBUyBhZGRsaWNlbnNlCgpGUk9NIC0tcGxhdGZvcm09JHtCVUlMRFBMQVRGT1JNfSBnb2xhbmc6JHtHT19WRVJTSU9OfS1hbHBpbmUgQVMgYmFzZQpDT1BZIC0tZnJvbT14eCAvIC8KUlVOIGFwayBhZGQgLS1uby1jYWNoZSBcCiAgICAgIGNsYW5nIFwKICAgICAgZG9ja2VyIFwKICAgICAgZmlsZSBcCiAgICAgIGZpbmR1dGlscyBcCiAgICAgIGdpdCBcCiAgICAgIG1ha2UgXAogICAgICBwcm90b2MgXAogICAgICBwcm90b2J1Zi1kZXYKV09SS0RJUiAvc3JjCkVOViBDR09fRU5BQkxFRD0wCgpGUk9NIGJhc2UgQVMgYnVpbGQtYmFzZQpDT1BZIGdvLiogLgpSVU4gLS1tb3VudD10eXBlPWNhY2hlLHRhcmdldD0vZ28vcGtnL21vZCBcCiAgICAtLW1vdW50PXR5cGU9Y2FjaGUsdGFyZ2V0PS9yb290Ly5jYWNoZS9nby1idWlsZCBcCiAgICBnbyBtb2QgZG93bmxvYWQKCkZST00gYnVpbGQtYmFzZSBBUyB2ZW5kb3JlZApSVU4gLS1tb3VudD10eXBlPWJpbmQsdGFyZ2V0PS4scncgXAogICAgLS1tb3VudD10eXBlPWNhY2hlLHRhcmdldD0vZ28vcGtnL21vZCBcCiAgICBnbyBtb2QgdGlkeSAmJiBta2RpciAvb3V0ICYmIGNwIGdvLm1vZCBnby5zdW0gL291dAoKRlJPTSBzY3JhdGNoIEFTIHZlbmRvci11cGRhdGUKQ09QWSAtLWZyb209dmVuZG9yZWQgL291dCAvCgpGUk9NIHZlbmRvcmVkIEFTIHZlbmRvci12YWxpZGF0ZQpSVU4gLS1tb3VudD10eXBlPWJpbmQsdGFyZ2V0PS4scncgPDxFT1QKICBzZXQgLWUKICBnaXQgYWRkIC1BCiAgY3AgLXJmIC9vdXQvKiAuCiAgZGlmZj0kKGdpdCBzdGF0dXMgLS1wb3JjZWxhaW4gLS0gZ28ubW9kIGdvLnN1bSkKICBpZiBbIC1uICIkZGlmZiIgXTsgdGhlbgogICAgZWNobyA+JjIgJ0VSUk9SOiBWZW5kb3IgcmVzdWx0IGRpZmZlcnMuIFBsZWFzZSB2ZW5kb3IgeW91ciBwYWNrYWdlIHdpdGggIm1ha2UgZ28tbW9kLXRpZHkiJwogICAgZWNobyAiJGRpZmYiCiAgICBleGl0IDEKICBmaQpFT1QKCkZST00gYnVpbGQtYmFzZSBBUyBidWlsZApBUkcgQlVJTERfVEFHUwpBUkcgQlVJTERfRkxBR1MKQVJHIFRBUkdFVFBMQVRGT1JNClJVTiAtLW1vdW50PXR5cGU9YmluZCx0YXJnZXQ9LiBcCiAgICAtLW1vdW50PXR5cGU9Y2FjaGUsdGFyZ2V0PS9yb290Ly5jYWNoZSBcCiAgICAtLW1vdW50PXR5cGU9Y2FjaGUsdGFyZ2V0PS9nby9wa2cvbW9kIFwKICAgIC0tbW91bnQ9dHlwZT1iaW5kLGZyb209b3N4Y3Jvc3Msc3JjPS9vc3hzZGssdGFyZ2V0PS94eC1zZGsgXAogICAgeHgtZ28gLS13cmFwICYmIFwKICAgIGlmIFsgIiQoeHgtaW5mbyBvcykiID09ICJkYXJ3aW4iIF07IHRoZW4gZXhwb3J0IENHT19FTkFCTEVEPTE7IGZpICYmIFwKICAgIG1ha2UgYnVpbGQgR09fQlVJTERUQUdTPSIkQlVJTERfVEFHUyIgREVTVERJUj0vb3V0ICYmIFwKICAgIHh4LXZlcmlmeSAtLXN0YXRpYyAvb3V0L2RvY2tlci1jb21wb3NlCgpGUk9NIGJ1aWxkLWJhc2UgQVMgbGludApBUkcgQlVJTERfVEFHUwpFTlYgR09MQU5HQ0lfTElOVF9DQUNIRT0vY2FjaGUvZ29sYW5nY2ktbGludApSVU4gLS1tb3VudD10eXBlPWJpbmQsdGFyZ2V0PS4gXAogICAgLS1tb3VudD10eXBlPWNhY2hlLHRhcmdldD0vcm9vdC8uY2FjaGUgXAogICAgLS1tb3VudD10eXBlPWNhY2hlLHRhcmdldD0vZ28vcGtnL21vZCBcCiAgICAtLW1vdW50PXR5cGU9Y2FjaGUsdGFyZ2V0PS9jYWNoZS9nb2xhbmdjaS1saW50IFwKICAgIC0tbW91bnQ9ZnJvbT1nb2xhbmdjaS1saW50LHNvdXJjZT0vdXNyL2Jpbi9nb2xhbmdjaS1saW50LHRhcmdldD0vdXNyL2Jpbi9nb2xhbmdjaS1saW50IFwKICAgIGdvbGFuZ2NpLWxpbnQgY2FjaGUgc3RhdHVzICYmIFwKICAgIGdvbGFuZ2NpLWxpbnQgcnVuIC0tYnVpbGQtdGFncyAiJEJVSUxEX1RBR1MiIC4vLi4uCgpGUk9NIGJ1aWxkLWJhc2UgQVMgdGVzdApBUkcgQ0dPX0VOQUJMRUQ9MApBUkcgQlVJTERfVEFHUwpSVU4gLS1tb3VudD10eXBlPWJpbmQsdGFyZ2V0PS4gXAogICAgLS1tb3VudD10eXBlPWNhY2hlLHRhcmdldD0vcm9vdC8uY2FjaGUgXAogICAgLS1tb3VudD10eXBlPWNhY2hlLHRhcmdldD0vZ28vcGtnL21vZCBcCiAgICBybSAtcmYgL3RtcC9jb3ZlcmFnZSAmJiBcCiAgICBta2RpciAtcCAvdG1wL2NvdmVyYWdlICYmIFwKICAgIHJtIC1yZiAvdG1wL3JlcG9ydCAmJiBcCiAgICBta2RpciAtcCAvdG1wL3JlcG9ydCAmJiBcCiAgICBnbyBydW4gZ290ZXN0LnRvb2xzL2dvdGVzdHN1bUBsYXRlc3QgLS1mb3JtYXQgdGVzdG5hbWUgLS1qdW5pdGZpbGUgIi90bXAvcmVwb3J0L3JlcG9ydC54bWwiIC0tIC10YWdzICIkQlVJTERfVEFHUyIgLXYgLWNvdmVyIC1jb3Zlcm1vZGU9YXRvbWljICQoZ28gbGlzdCAgJChUQUdTKSAuLy4uLiB8IGdyZXAgLXZFICdlMmUnKSAtYXJncyAtdGVzdC5nb2NvdmVyZGlyPSIvdG1wL2NvdmVyYWdlIiAmJiBcCiAgICBnbyB0b29sIGNvdmRhdGEgcGVyY2VudCAtaT0vdG1wL2NvdmVyYWdlCgpGUk9NIHNjcmF0Y2ggQVMgdGVzdC1jb3ZlcmFnZQpDT1BZIC0tZnJvbT10ZXN0IC0tbGluayAvdG1wL2NvdmVyYWdlIC8KQ09QWSAtLWZyb209dGVzdCAtLWxpbmsgL3RtcC9yZXBvcnQgLwoKRlJPTSBiYXNlIEFTIGxpY2Vuc2Utc2V0CkFSRyBMSUNFTlNFX0ZJTEVTClJVTiAtLW1vdW50PXR5cGU9YmluZCx0YXJnZXQ9LixydyBcCiAgICAtLW1vdW50PWZyb209YWRkbGljZW5zZSxzb3VyY2U9L2FwcC9hZGRsaWNlbnNlLHRhcmdldD0vdXNyL2Jpbi9hZGRsaWNlbnNlIFwKICAgIGZpbmQgLiAtcmVnZXggIiR7TElDRU5TRV9GSUxFU30iIHwgeGFyZ3MgYWRkbGljZW5zZSAtYyAnRG9ja2VyIENvbXBvc2UgQ0xJJyAtbCBhcGFjaGUgJiYgXAogICAgbWtkaXIgL291dCAmJiBcCiAgICBmaW5kIC4gLXJlZ2V4ICIke0xJQ0VOU0VfRklMRVN9IiB8IGNwaW8gLXBkbSAvb3V0CgpGUk9NIHNjcmF0Y2ggQVMgbGljZW5zZS11cGRhdGUKQ09QWSAtLWZyb209c2V0IC9vdXQgLwoKRlJPTSBiYXNlIEFTIGxpY2Vuc2UtdmFsaWRhdGUKQVJHIExJQ0VOU0VfRklMRVMKUlVOIC0tbW91bnQ9dHlwZT1iaW5kLHRhcmdldD0uIFwKICAgIC0tbW91bnQ9ZnJvbT1hZGRsaWNlbnNlLHNvdXJjZT0vYXBwL2FkZGxpY2Vuc2UsdGFyZ2V0PS91c3IvYmluL2FkZGxpY2Vuc2UgXAogICAgZmluZCAuIC1yZWdleCAiJHtMSUNFTlNFX0ZJTEVTfSIgfCB4YXJncyBhZGRsaWNlbnNlIC1jaGVjayAtYyAnRG9ja2VyIENvbXBvc2UgQ0xJJyAtbCBhcGFjaGUgLWlnbm9yZSB2YWxpZGF0ZSAtaWdub3JlIHRlc3RkYXRhIC1pZ25vcmUgcmVzb2x2ZXBhdGggLXYKCkZST00gYmFzZSBBUyBkb2NzZ2VuCldPUktESVIgL3NyYwpSVU4gLS1tb3VudD10YXJnZXQ9LiBcCiAgICAtLW1vdW50PXRhcmdldD0vcm9vdC8uY2FjaGUsdHlwZT1jYWNoZSBcCiAgICAtLW1vdW50PXR5cGU9Y2FjaGUsdGFyZ2V0PS9nby9wa2cvbW9kIFwKICAgIGdvIGJ1aWxkIC1vIC9vdXQvZG9jc2dlbiAuL2RvY3MveWFtbC9tYWluL2dlbmVyYXRlLmdvCgpGUk9NIC0tcGxhdGZvcm09JHtCVUlMRFBMQVRGT1JNfSBhbHBpbmUgQVMgZG9jcy1idWlsZApSVU4gYXBrIGFkZCAtLW5vLWNhY2hlIHJzeW5jIGdpdApXT1JLRElSIC9zcmMKQ09QWSAtLWZyb209ZG9jc2dlbiAvb3V0L2RvY3NnZW4gL3Vzci9iaW4KQVJHIERPQ1NfRk9STUFUUwpSVU4gLS1tb3VudD10YXJnZXQ9L2NvbnRleHQgXAogICAgLS1tb3VudD10YXJnZXQ9Lix0eXBlPXRtcGZzIDw8RU9UCiAgc2V0IC1lCiAgcnN5bmMgLWEgL2NvbnRleHQvLiAuCiAgZG9jc2dlbiAtLWZvcm1hdHMgIiRET0NTX0ZPUk1BVFMiIC0tc291cmNlICJkb2NzL3JlZmVyZW5jZSIKICBta2RpciAvb3V0CiAgY3AgLXIgZG9jcy9yZWZlcmVuY2UgL291dApFT1QKCkZST00gc2NyYXRjaCBBUyBkb2NzLXVwZGF0ZQpDT1BZIC0tZnJvbT1kb2NzLWJ1aWxkIC9vdXQgL291dAoKRlJPTSBkb2NzLWJ1aWxkIEFTIGRvY3MtdmFsaWRhdGUKUlVOIC0tbW91bnQ9dGFyZ2V0PS9jb250ZXh0IFwKICAgIC0tbW91bnQ9dGFyZ2V0PS4sdHlwZT10bXBmcyA8PEVPVAogIHNldCAtZQogIHJzeW5jIC1hIC9jb250ZXh0Ly4gLgogIGdpdCBhZGQgLUEKICBybSAtcmYgZG9jcy9yZWZlcmVuY2UvKgogIGNwIC1yZiAvb3V0LyogLi9kb2NzLwogIGlmIFsgLW4gIiQoZ2l0IHN0YXR1cyAtLXBvcmNlbGFpbiAtLSBkb2NzL3JlZmVyZW5jZSkiIF07IHRoZW4KICAgIGVjaG8gPiYyICdFUlJPUjogRG9jcyByZXN1bHQgZGlmZmVycy4gUGxlYXNlIHVwZGF0ZSB3aXRoICJtYWtlIGRvY3MiJwogICAgZ2l0IHN0YXR1cyAtLXBvcmNlbGFpbiAtLSBkb2NzL3JlZmVyZW5jZQogICAgZXhpdCAxCiAgZmkKRU9UCgpGUk9NIHNjcmF0Y2ggQVMgYmluYXJ5LXVuaXgKQ09QWSAtLWxpbmsgLS1mcm9tPWJ1aWxkIC9vdXQvZG9ja2VyLWNvbXBvc2UgLwpGUk9NIGJpbmFyeS11bml4IEFTIGJpbmFyeS1kYXJ3aW4KRlJPTSBiaW5hcnktdW5peCBBUyBiaW5hcnktbGludXgKRlJPTSBzY3JhdGNoIEFTIGJpbmFyeS13aW5kb3dzCkNPUFkgLS1saW5rIC0tZnJvbT1idWlsZCAvb3V0L2RvY2tlci1jb21wb3NlIC9kb2NrZXItY29tcG9zZS5leGUKRlJPTSBiaW5hcnktJFRBUkdFVE9TIEFTIGJpbmFyeQojIGVuYWJsZSBzY2FubmluZyBmb3IgdGhpcyBzdGFnZQpBUkcgQlVJTERLSVRfU0JPTV9TQ0FOX1NUQUdFPXRydWUKCkZST00gLS1wbGF0Zm9ybT0kQlVJTERQTEFURk9STSBhbHBpbmUgQVMgcmVsZWFzZXIKV09SS0RJUiAvd29yawpBUkcgVEFSR0VUT1MKQVJHIFRBUkdFVEFSQ0gKQVJHIFRBUkdFVFZBUklBTlQKUlVOIC0tbW91bnQ9ZnJvbT1iaW5hcnkgXAogICAgbWtkaXIgLXAgL291dCAmJiBcCiAgICAjIFRPRE86IHNob3VsZCBqdXN0IHVzZSBzdGFuZGFyZCBhcmNoCiAgICBUQVJHRVRBUkNIPSQoWyAiJFRBUkdFVEFSQ0giID0gImFtZDY0IiBdICYmIGVjaG8gIng4Nl82NCIgfHwgZWNobyAiJFRBUkdFVEFSQ0giKTsgXAogICAgVEFSR0VUQVJDSD0kKFsgIiRUQVJHRVRBUkNIIiA9ICJhcm02NCIgXSAmJiBlY2hvICJhYXJjaDY0IiB8fCBlY2hvICIkVEFSR0VUQVJDSCIpOyBcCiAgICBjcCBkb2NrZXItY29tcG9zZSogIi9vdXQvZG9ja2VyLWNvbXBvc2UtJHtUQVJHRVRPU30tJHtUQVJHRVRBUkNIfSR7VEFSR0VUVkFSSUFOVH0kKGxzIGRvY2tlci1jb21wb3NlKiB8IHNlZCAtZSAncy9eZG9ja2VyLWNvbXBvc2UvLycpIgoKRlJPTSBzY3JhdGNoIEFTIHJlbGVhc2UKQ09QWSAtLWZyb209cmVsZWFzZXIgL291dC8gLwo=",
+              "llbDefinition": [
+                {
+                  "id": "step0",
+                  "op": {
+                    "Op": {
+                      "source": {
+                        "identifier": "local://dockerfile",
+                        "attrs": {
+                          "local.differ": "none",
+                          "local.followpaths": "[\"Dockerfile\",\"Dockerfile.dockerignore\",\"dockerfile\"]",
+                          "local.sharedkeyhint": "dockerfile"
+                        }
+                      }
+                    },
+                    "constraints": {}
+                  }
+                },
+                {
+                  "id": "step1",
+                  "op": {
+                    "Op": {}
+                  },
+                  "inputs": [
+                    "step0:0"
+                  ]
+                }
+              ],
+              "digestMapping": {
+                "sha256:726c30a182fbd3985176f4b00f87981ceb70251b43461cbc630c34e1b1f456cb": "step0",
+                "sha256:e2a8283018704c973b201c6b9098f780fe5f5d782a43479beda0e07f28a688b7": "step1"
+              }
+            }
+          ]
+        },
+        "layers": {
+          "step10:0": [
+            [
+              {
+                "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                "digest": "sha256:0928efacd97d6448ace1043bd18e02671e88b00ad84b9f420ae81b593dadb462",
+                "size": 170
+              }
+            ]
+          ],
+          "step1:0": [
+            [
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:1f3e46996e2966e4faa5846e56e76e3748b7315e2ded61476c24403d592134f0",
+                "size": 3641715
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:f6ceda9a9a9e67f4b111d880b8f1c6134736146d3890784bbe942e581cd3b2e5",
+                "size": 94
+              }
+            ]
+          ],
+          "step4:0": [
+            [
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:1f3e46996e2966e4faa5846e56e76e3748b7315e2ded61476c24403d592134f0",
+                "size": 3641715
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:587c9764f7cbb7538537e515a99396d84845bf1fadeff0a03a6ebdb6cb699e6d",
+                "size": 294883
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:67b1e9584e1979ea75698173e605956715dd1408a24052dfc4991b231c127706",
+                "size": 69363444
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:bb3d89699aae28868e2ed903c6ec2dd42e83445423c6341084c0242afa5e5261",
+                "size": 127
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1",
+                "size": 32
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:6390c9e16af5a0bcbc5949cfa9e220778ff9a6728ea5d6afc1692616c6d9564b",
+                "size": 17019
+              }
+            ]
+          ],
+          "step5:0": [
+            [
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:1f3e46996e2966e4faa5846e56e76e3748b7315e2ded61476c24403d592134f0",
+                "size": 3641715
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:587c9764f7cbb7538537e515a99396d84845bf1fadeff0a03a6ebdb6cb699e6d",
+                "size": 294883
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:67b1e9584e1979ea75698173e605956715dd1408a24052dfc4991b231c127706",
+                "size": 69363444
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:bb3d89699aae28868e2ed903c6ec2dd42e83445423c6341084c0242afa5e5261",
+                "size": 127
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1",
+                "size": 32
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:6390c9e16af5a0bcbc5949cfa9e220778ff9a6728ea5d6afc1692616c6d9564b",
+                "size": 17019
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:18d8bdcdfce10b3cddde0429da5c571f377efc2024184db8762f73081fa2b11b",
+                "size": 271716423
+              }
+            ]
+          ],
+          "step6:0": [
+            [
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:1f3e46996e2966e4faa5846e56e76e3748b7315e2ded61476c24403d592134f0",
+                "size": 3641715
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:587c9764f7cbb7538537e515a99396d84845bf1fadeff0a03a6ebdb6cb699e6d",
+                "size": 294883
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:67b1e9584e1979ea75698173e605956715dd1408a24052dfc4991b231c127706",
+                "size": 69363444
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:bb3d89699aae28868e2ed903c6ec2dd42e83445423c6341084c0242afa5e5261",
+                "size": 127
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1",
+                "size": 32
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:6390c9e16af5a0bcbc5949cfa9e220778ff9a6728ea5d6afc1692616c6d9564b",
+                "size": 17019
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:18d8bdcdfce10b3cddde0429da5c571f377efc2024184db8762f73081fa2b11b",
+                "size": 271716423
+              },
+              {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "digest": "sha256:42d9002dabd404c22ac757bb214df22cdd04667134b7466304852a0ff6b1327e",
+                "size": 93
+              }
+            ]
+          ]
+        }
+      }
+    }
+  }
+}
