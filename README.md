@@ -15,3 +15,11 @@ curl -sSO https://shell.nuoyis.net/nuoyis-init.sh;bash nuoyis-init.sh
 ```
 curl -sSO https://shell.nuoyis.net/ubuntu-rootstart.sh;bash ubuntu-rootstart.sh
 ```
+
+3. centos stream 9转rocky （国内机器优化版）
+
+   ```
+   curl -sSO https://shell.nuoyis.net/migrate2rocky9.sh;bash migrate2rocky9.sh -r
+   ```
+
+   
