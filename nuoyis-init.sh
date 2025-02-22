@@ -11,6 +11,7 @@ dns="223.5.5.5"
 #自动获取变量区域
 startTime=`date +%Y%m%d-%H:%M:%S`
 startTime_s=`date +%s`
+osversion="\$releasever"
 whois=$(whoami)
 # nuo_setnetwork_shell=$(ip a | grep -E '^[0-9]+: ' | grep -v lo | awk '{print $2}' | sed 's/://')
 nuo_setnetwork_shell=$(ip a | grep -oE "inet ([0-9]{1,3}.){3}[0-9]{1,3}" | awk 'NR==2 {print $2}')
@@ -23,7 +24,8 @@ if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
     PM="yum"
 	case $system_name in
 		"CentOS")
-		osname="centos-stream\$releasever-stream"
+		osname="centos-stream"
+		osversion="\$releasever-stream"
 		;;
 		"openEuler")
 	esac
@@ -93,9 +95,9 @@ nuoyis_install_manger(){
 		"update")
 			# 更新所有软件包
 			if [ $PM = "apt" ]; then
-				yes | $PM update
+				yes | $PM update -y
 			fi
-			yes | $PM upgrade
+			yes | $PM upgrade -y
 			;;
 		"clean")
 			# 清理缓存
@@ -103,7 +105,7 @@ nuoyis_install_manger(){
 			;;
 		"makecache")
 			# 生成缓存
-			$PM makecache
+			$PM makecache -y
 			;;
 		"installfull")
 			# 在Yum中使用特定选项安装软件包
@@ -491,8 +493,6 @@ nuoyis_lnmp_install(){
                 --enable-session
 		    make -j$(nproc) && make install
 			cd ..
-			# nuoyis_download_manager 
-			# ./configure --prefix=/$auth-server/php/server --sysconfdir=/$auth-server/php/conf --with-openssl --with-zlib --with-bz2 --with-curl --enable-bcmath --enable-gd --with-webp --with-jpeg --with-mhash --enable-mbstring --with-imap-ssl --with-mysqli --enable-exif --with-ffi --with-zip --enable-sockets --with-pcre-jit --enable-fpm --with-pdo-mysql --enable-pcntl
 			touch /$auth-server/logs/nginx/{error.log,nginx.pid}
 			# rm -rf ./nginx-1.27.0
 			# rm -rf ./nginx-1.27.0.tar.gz
@@ -802,83 +802,105 @@ if [ $PM = "yum" ];then
 			mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
 			if [ $nuoyis_yum_install -eq 1 ];then
 				yumurl="mirrors.jcut.edu.cn"
-				osname=${osname:-rocky/\$releasever}
+				if [ $system_name = "Rocky" ]; then
+					osname="rocky"
+				fi
 			else
 				yumurl="mirrors.aliyun.com"
-				osname=${osname:-rockylinux/\$releasever}
+				if [ $system_name = "Rocky" ]; then
+					osname="rockylinux"
+				fi
 			fi
 				cat > /etc/yum.repos.d/$auth.repo << EOF
 [${auth}-BaseOS]
 name=${auth} - BaseOS
-baseurl=https://${yumurl}/${osname}/BaseOS/\$basearch/os/
-gpgcheck=0
+baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/\$basearch/os/
+gpgcheck=1
+gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
 enabled=1
 countme=1
 metadata_expire=6h
+priority=1
 
 [${auth}-baseos-debuginfo]
 name=${auth} - BaseOS - Debug
-baseurl=https://${yumurl}/${osname}/BaseOS/\$basearch/debug/tree/
-gpgcheck=0
+baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/\$basearch/debug/tree/
+gpgcheck=1
+gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
 enabled=1
 countme=1
 metadata_expire=6h
+priority=1
 
 [${auth}-baseos-source]
 name=${auth} - BaseOS - Source
-baseurl=https://${yumurl}/${osname}/BaseOS/source/tree/
-gpgcheck=0
+baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/source/tree/
+gpgcheck=1
+gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
 enabled=1
 countme=1
 metadata_expire=6h
+priority=1
 
 [${auth}-appstream]
 name=${auth} - AppStream
-baseurl=https://${yumurl}/${osname}/AppStream/\$basearch/os/
-gpgcheck=0
+baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/\$basearch/os/
+gpgcheck=1
+gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
 enabled=1
 countme=1
 metadata_expire=6h
+priority=1
 
 [${auth}-appstream-debuginfo]
 name=${auth} - AppStream - Debug
-baseurl=https://${yumurl}/${osname}/AppStream/\$basearch/debug/tree/
-gpgcheck=0
+baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/\$basearch/debug/tree/
+gpgcheck=1
+gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
 enabled=1
 countme=1
 metadata_expire=6h
+priority=1
 
 [${auth}-appstream-source]
 name=${auth} - AppStream - Source
-baseurl=https://${yumurl}/${osname}/AppStream/source/tree/
-gpgcheck=0
+baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/source/tree/
+gpgcheck=1
+gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
 enabled=1
 countme=1
 metadata_expire=6h
+priority=1
 
 [${auth}-crb]
 name=${auth} - CRB
-baseurl=https://${yumurl}/${osname}/CRB/\$basearch/os/
-gpgcheck=0
+baseurl=https://${yumurl}/${osname}/${osversion}/CRB/\$basearch/os/
+gpgcheck=1
+gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
 enabled=1
 countme=1
 metadata_expire=6h
+priority=1
 
 [${auth}-crb-debuginfo]
 name=${auth} - CRB - Debug
-baseurl=https://${yumurl}/${osname}/CRB/\$basearch/debug/tree/
-gpgcheck=0
+baseurl=https://${yumurl}/${osname}/${osversion}/CRB/\$basearch/debug/tree/
+gpgcheck=1
+gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
 enabled=1
 countme=1
 metadata_expire=6h
+priority=1
 
 [${auth}-crb-source]
 name=${auth} - CRB - Source
-baseurl=https://${yumurl}/${osname}/CRB/source/tree/
-gpgcheck=0
+baseurl=https://${yumurl}/${osname}/${osversion}/CRB/source/tree/
+gpgcheck=1
+gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
 enabled=1
 countme=1
 metadata_expire=6h
+priority=1
 EOF
 			echo "skip_broken=True" >> /etc/yum.conf
 			echo "skip_broken=True" >> /etc/dnf/dnf.conf
@@ -899,16 +921,16 @@ EOF
 				nuoyis_install_manger remove elrepo-release.noarch
 			fi
 
-			rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-elrepo.org
-			nuoyis_install_manger install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://mirrors.cernet.edu.cn/elrepo/elrepo/el9/x86_64/RPMS/elrepo-release-9.0-1.el9.elrepo.noarch.rpm
+			rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
+			yum install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://mirrors.cernet.edu.cn/elrepo/elrepo/el9/x86_64/RPMS/elrepo-release-9.0-1.el9.elrepo.noarch.rpm -y
+			rm -rf /etc/yum.repos.d/epel-cisco-openh264.repo
 			sed -e 's!^metalink=!#metalink=!g' \
 			-e 's!^#baseurl=!baseurl=!g' \
 			-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
 			-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
-			-i /etc/yum.repos.d/epel{,-testing}.repo
+			-i /etc/yum.repos.d/epel{,*}.repo
 			sed -e 's/http:\/\/elrepo.org\/linux/https:\/\/mirrors.aliyun.com\/elrepo/g' \
 			    -e 's/mirrorlist=/#mirrorlist=/g' \
-				-e 's/gpgcheck=1/gpgcheck=0/g' \
 				-i /etc/yum.repos.d/elrepo.repo
 			nuoyis_install_manger install https://shell.nuoyis.net/download/remi-release-9.rpm
 			sed -e 's|^mirrorlist=|#mirrorlist=|g' \
@@ -982,7 +1004,7 @@ EOF
 
 echo -e "=================================================================="
 echo -e "     诺依阁服务器初始化脚本V4.0"
-echo -e "     更新时间:2025.02.15"
+echo -e "     更新时间:2025.02.22"
 echo -e "     博客地址:https://blog.nuoyis.net"
 echo -e "     \e[31m\e[1m注意1:执行本脚本即同意作者方不承担执行脚本的后果 \e[0m"
 echo -e "     \e[31m\e[1m注意2:当前脚本pid为$$,如果卡死请执行kill -9 $$ \e[0m"
@@ -1249,10 +1271,13 @@ fi
 
 nuoyis_systemctl_manger start tuned.service
 tuned-adm profile `tuned-adm recommend`
-sed -i '/^net.core.default_qdisc/d; /^net.ipv4.tcp_congestion_control/d; /^net.bridge.bridge-nf-call-ip6tables/d; /^net.bridge.bridge-nf-call-iptables/d; /^net.ipv4.ip_forward/d' /etc/sysctl.conf
+for nsysctl in net.core.default_qdisc net.ipv4.tcp_congestion_control kernel.sysrq net.ipv4.neigh.default.gc_stale_time net.ipv4.conf.all.rp_filter net.ipv4.conf.default.rp_filter net.ipv4.conf.default.arp_announce net.ipv4.conf.lo.arp_announce net.ipv4.conf.all.arp_announce net.ipv4.tcp_max_tw_buckets net.ipv4.tcp_syncookies net.ipv4.tcp_max_syn_backlog net.ipv4.tcp_synack_retries net.ipv4.tcp_slow_start_after_idle
+   do
+      sed -i "/^${nsysctl}/d" /etc/sysctl.conf
+   done
 cat >> /etc/sysctl.conf << EOF
-net.core.default_qdisc=fq
-net.ipv4.tcp_congestion_control=bbr
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
 kernel.sysrq = 1
 net.ipv4.neigh.default.gc_stale_time = 120
 net.ipv4.conf.all.rp_filter = 0
