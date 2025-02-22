@@ -716,7 +716,7 @@ nuoyis_docker_install(){
 		sed -i 's+$releasever+8+'  /etc/yum.repos.d/docker-ce.repo
 	fi
 	nuoyis_install_manger makecache
-	nuoyis_install_manger install docker-ce docker-ce-cli container.io docker-compose-plugin
+	nuoyis_install_manger install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 	mkdir -p /etc/docker
 	touch /etc/docker/daemon.json
 	cat > /etc/docker/daemon.json << EOF
