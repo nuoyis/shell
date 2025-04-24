@@ -3,13 +3,13 @@
 # Version:       : v1.5
 # Description    : Linux quick initialization and installation
 # Create Date    : 2025-04-23
-# Author         : nuoyis
+# nunameor         : nuoyis
 # Webside        : blog.nuoyis.net
 
 LANG=en_US.UTF-8
 #变量定义区域
 #手动变量定义区域
-auth="nuoyis"
+nuname="nuoyis"
 CIDR="10.104.43"
 gateway="10.104.0.1"
 dns="223.5.5.5"
@@ -45,12 +45,18 @@ fi
 
 help::main(){
 IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
-  -sw, --swap          Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
+  -n, --name           yum name and folder name
   -host,--hostname     default is options_toolbox_init,so you have use this options before install
   -r,  --mirror        yum mirrors update,if you not used, it will not be executed. Options: edu aliyun other
-  -rn, --mirrorname    yum mirrors name
   -ln, --lnmp          install nuoyis version lnmp. Options: gcc docker yum
+  -bt, --btpanelenable install bt panel
+  -tu, --tuning	       linux system tuning
+  -ku, --kernelupdate  use elrepo to update kernel
+  -sw, --swap          Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
   -mp, --mysqlpassword nuoyis-lnmp-np password set  
+  -do, --dockerinstall install docker
+  -na, --nas           install vsftpd nginx and nfs
+  -oll, --ollama       install ollama
   -h,  --help          show shell help
 EOF
 
@@ -68,7 +74,7 @@ exit 0
 
 manager::download(){
 	if [ -f /usr/bin/curl ];then
-		curl -sSO $1;
+		curl -sSOLk $1;
 	else 
 		wget $1;
 	fi;
@@ -103,7 +109,7 @@ manger::systemctl(){
 	fi    
 }
 
-manager::yuminstall(){
+manager::yum(){
     case $1 in
 		"remove")
 			# 移除指定的软件包
@@ -189,7 +195,7 @@ EOF
 	fi
 
 # 原有环境判断并卸载
-    manager::yuminstall remove nginx* php* mariadb* mysql*
+    manager::yum remove nginx* php* mariadb* mysql*
     systemctl disable nginx php-fpm mysqld
 	for service in nginx httpd mysqld pure-ftpd tomcat redis memcached mongodb pgsql tomcat tomcat7 tomcat8 tomcat9 php-fpm-52 php-fpm-53 php-fpm-54 php-fpm-55 php-fpm-56 php-fpm-70 php-fpm-71 php-fpm-72 php-fpm-73
 		do
@@ -233,13 +239,13 @@ EOF
 install::nas(){
     sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
     useradd nuoyis-file
-    mkdir -p /nuoyis-server/sharefile
-    chown -R nuoyis-file:nuoyis-file /nuoyis-server/sharefile
-    chown root:nuoyis-file /nuoyis-server/sharefile
-    chmod -R 775 /nuoyis-server/sharefile
-    # chmod g+s /nuoyis-server/sharefile
+    mkdir -p /$nuname-server/sharefile
+    chown -R nuoyis-file:nuoyis-file /$nuname-server/sharefile
+    chown root:nuoyis-file /$nuname-server/sharefile
+    chmod -R 775 /$nuname-server/sharefile
+    # chmod g+s /$nuname-server/sharefile
     # 额外配置
-    manager::yuminstall install vsftpd samba*
+    manager::yum install vsftpd samba*
 
     firewall-cmd --per --add-service=smb
     firewall-cmd --per --add-service=ftp
@@ -262,14 +268,14 @@ anon_mkdir_write_enable=YES
 anon_other_write_enable=YES
 # 匿名用户的掩码（022 的实际权限为 666-022=644）
 anon_umask=022
-anon_root=/nuoyis-server/sharefile
+anon_root=/$nuname-server/sharefile
 chown_uploads=YES
 chown_username=nuoyis-file
 
 # 系统用户登录
 local_enable=YES
 local_umask=022
-local_root=/nuoyis-server/sharefile
+local_root=/$nuname-server/sharefile
 chroot_local_user=YES
 allow_writeable_chroot=YES
 chroot_list_enable=YES
@@ -329,7 +335,7 @@ cat > /etc/samba/smb.conf <<EOF
 
 [share]
         comment = nuoyis's share
-        path = /nuoyis-server/sharefile
+        path = /$nuname-server/sharefile
 		browsable = yes
 		writable = yes
 		guest ok = yes
@@ -346,7 +352,7 @@ echo "#  Welcome  to  nuoyis's  NAS  #"
 echo "################################"
 EOF
 
-cat > /$auth-server/nginx/conf/default.conf << EOF
+cat > /$nuname-server/nginx/conf/default.conf << EOF
 server {
 	listen 80;
     # listen [::]:80;
@@ -355,7 +361,7 @@ server {
 	#charset koi8-r;
 	charset utf-8;
 	location /nuoyisnb {
-                alias /nuoyis-server/sharefile;
+                alias /$nuname-server/sharefile;
                 autoindex on;                         # 启用自动首页功能
                 autoindex_format html;                # 首页格式为HTML
                 autoindex_exact_size off;             # 文件大小自动换算
@@ -394,15 +400,15 @@ manger::systemctl start vsftpd smb nmb
 install::docker(){
 echo "安装Docker"
 	if [ $PM = "yum" ];then
-	manager::yuminstall install yum-utils device-mapper-persistent-data lvm2
-	manager::yuminstall repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+	manager::yum install yum-utils device-mapper-persistent-data lvm2
+	manager::yum repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 	fi
 	sed -i 's+download.docker.com+mirrors.aliyun.com/docker-ce+' /etc/yum.repos.d/docker-ce.repo
 	if [ $system_name == "openEuler" ];then
 		sed -i 's+$releasever+8+'  /etc/yum.repos.d/docker-ce.repo
 	fi
-	manager::yuminstall makecache
-	manager::yuminstall install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+	manager::yum makecache
+	manager::yum install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 	mkdir -p /etc/docker
 	touch /etc/docker/daemon.json
 	cat > /etc/docker/daemon.json << EOF
@@ -442,15 +448,14 @@ EOF
 }
 
 install::ollama(){
-    echo "test"
+    manager::download https://ollama.com/install.sh
+	source install_panel.sh
 }
 
 install::lnmp(){
 	echo "安装lnmp"
-	echo "正在测试中，请晚些时候再执行"
 	sleep 30
 	if [ $PM = "yum" ];then
-		manager::yuminstall install pcre pcre-devel zlib zlib-devel libxml2 libxml2-devel readline readline-devel ncurses ncerses-devel perl-devel perl-ExtUtils-Embed
 		aboutserver=`systemctl is-active firewalld`
 		if [ $aboutserver == "inactive" ];then
 			manger::systemctl start firewalld
@@ -462,22 +467,20 @@ install::lnmp(){
 		if [ $options_lnmp_value == "yum" ];then
 			# 快速安装
 			yes | dnf module reset php
-			yes | dnf module install php:remi-8.2
-			manager::yuminstall install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb-server
+			yes | dnf module install php:remi-8.4
+			manager::yum install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb-server
 			manger::systemctl start nginx php-fpm mariadb
 			# ln -sf 
 		elif [ $options_lnmp_value == "gcc" ];then
 			# 编译安装
-			echo "创建lnmp基础文件夹"
-			mkdir -p /$auth-server/{logs/nginx,nginx/{webside,server,conf},php/{server,conf},mysql}
-			touch /nuoyis-server/logs/nginx/nginx.pid
-			id -u options_web >/dev/null 2>&1
+			mkdir -p /$nuname-server/{logs/nginx,web/{nginx/{webside/default,server/conf/ssl,conf},php/{server,conf},mysql}}
+			touch /$nuname-server/logs/nginx/nginx.pid
+			id -u nuoyis-web >/dev/null 2>&1
 			if [ $? -eq 1 ];then
-				useradd options_web -s /sbin/nologin -M
+				useradd -u 2233 -m -s /sbin/nologin nuoyis-web
 			fi;
-			echo "安装依赖项"
-			manager::yuminstall install gd gd-devel.x86_64 bzip2 bzip2-devel libcurl libcurl-devel* libjpeg libjpeg-devel libpng libpng-devel freetype freetype-devel gmp gmp-devel readline readline-devel libxslt libxslt-devel net-snmp-devel* libtool sqlite-devel* make expat-devel autoconf automake libxml* sqlite* bzip2-devel libcurl* net*
-			# --with-openssl=${options_openssl}
+			echo "安装必要依赖项"
+			manager::yum install autoconf bison re2c make procps-ng gcc gcc-c++ iputils pkgconfig pcre pcre-devel zlib-devel openssl openssl-devel libxslt-devel libpng-devel libjpeg-devel freetype-devel libxml2-devel sqlite-devel bzip2-devel libcurl-devel libXpm-devel libzip-devel oniguruma-devel gd-devel geoip-devel
 			manager::download https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
 			manager::download https://alist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/php/php-8.4.2.tar.gz
 			tar -xzvf nginx-1.27.0.tar.gz
@@ -488,7 +491,7 @@ install::lnmp(){
             sed -i 's/Server: nginx/Server: nuoyis server/g' ./src/http/ngx_http_header_filter_module.c
             sed -i 's/"Server: " NGINX_VER CRLF/"Server: nuoyis server" CRLF/g' ./src/http/ngx_http_header_filter_module.c
             sed -i 's/"Server: " NGINX_VER_BUILD CRLF/"Server: nuoyis server" CRLF/g' ./src/http/ngx_http_header_filter_module.c
-            ./configure --prefix=/nuoyis-web/nginx/server/1.27.0 \
+            ./configure --prefix=/$nuname-server/web/nginx/server \
                 --user=nuoyis-web --group=nuoyis-web \
                 --with-compat \
                 --with-file-aio \
@@ -515,12 +518,11 @@ install::lnmp(){
                 --with-stream_ssl_module \
                 --with-stream_ssl_preread_module
 			make -j$(nproc) && make install
-			chmod +x /nuoyis-server/nginx/server/sbin/nginx
+			chmod +x /$nuname-server/nginx/server/sbin/nginx
 			cd ../php-8.4.2
-			./configure --prefix=/nuoyis-web/php/8.4.2/ \
-                --enable-static \
+			./configure --prefix=/$nuname-server/web/php \
                 --disable-shared \
-                --with-config-file-path=/nuoyis-web/php/8.4.2/etc/ \
+                --with-config-file-path=/$nuname-server/web/php/etc/ \
                 --with-curl \
                 --with-freetype \
                 --enable-gd \
@@ -557,97 +559,90 @@ install::lnmp(){
                 --enable-cli \
                 --enable-intl \
                 --enable-calendar \
-                --enable-static \
                 --enable-ctype \
                 --enable-mysqlnd \
                 --enable-session
 		    make -j$(nproc) && make install
 			cd ..
-			touch /$auth-server/logs/nginx/{error.log,nginx.pid}
-			# rm -rf ./nginx-1.27.0
-			# rm -rf ./nginx-1.27.0.tar.gz
-			cat > /$auth-server/nginx/server/conf/nginx.conf << EOF
-worker_processes  1;
-error_log  /nuoyis-server/logs/nginx/error.log;
-pid        /nuoyis-server/logs/nginx/nginx.pid;
+			touch /$nuname-server/logs/nginx/{error.log,nginx.pid}
+cat > /$nuname-server/web/nginx/server/conf/nginx.conf <<EOF
+worker_processes auto;
+worker_rlimit_nofile 65535;
+error_log /nuoyis-server/logs/nginx/error.log warn;
+pid /nuoyis-server/logs/nginx/nginx.pid;
+
 events {
-	worker_connections  1024;
+    worker_connections 2048;
 }
+
 http {
-	include       mime.types;
-	default_type  application/octet-stream;
-	log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
-	                  '\$status \$body_bytes_sent "\$http_referer" '
-	                  '"\$http_user_agent" "\$http_x_forwarded_for"';
-	access_log  /nuoyis-server/logs/access.log  main;
-	sendfile        on;
-	tcp_nopush     on;
-	# keepalive_timeout  0;
-	keepalive_timeout  65;
-	# type_hash_max_size 4096;
-	
-	gzip on;
-	include /$auth-server/nginx/conf/*.conf;
+    include mime.types;
+    default_type application/octet-stream;
+
+    log_format main '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+                     '\$status \$body_bytes_sent "\$http_referer" '
+                     '"\$http_user_agent" "\$http_x_forwarded_for"';
+
+    access_log /nuoyis-server/logs/nginx/access.log main;
+
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 30;
+
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 256;
+    gzip_types text/plain application/xml text/css application/javascript application/json image/svg+xml;
+    gzip_proxied any;
+
+    open_file_cache max=1000 inactive=20s;
+    open_file_cache_valid 30s;
+    open_file_cache_errors off;
+
+    client_body_buffer_size 16K;
+    client_max_body_size 10M;
+
+
+    # 默认页面的 server 配置
+    server {
+        listen 80 default_server;
+        listen 443 default_server ssl;
+        server_name _;
+        # SSL 配置
+        ssl_certificate /$nuname-server/web/nginx/server/conf/ssl/default.pem;
+        ssl_certificate_key /$nuname-server/web/nginx/server/conf/ssl/default.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
+        ssl_prefer_server_ciphers on;
+        ssl_session_cache shared:SSL:10m;
+        ssl_session_timeout 10m;
+
+        charset utf-8;
+        root /$nuname-server/web/nginx/webside/default;
+        index index.html;
+
+        # 错误页面配置
+        error_page 404 /404.html;
+        error_page 500 502 503 504 /50x.html;
+
+        # include start-php-81.conf; 
+    }
+
+    # 其他相关配置
+    include /nuoyis-web/nginx/conf/*.conf;
 }
 EOF
+curl -L -o /$nuname-server/web/nginx/webside/default/index.html https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/index.html
+curl -L -o /$nuname-server/web/nginx/server/conf/ssl/default.pem https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.pem
+curl -L -o /$nuname-server/web/nginx/server/conf/ssl/default.key https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.key
+curl -L -o /$nuname-server/web/nginx/server/conf/start-php-84.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/start-php-84.conf.txt
+curl -L -o /$nuname-server/web/nginx/server/conf/path.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/path.conf.txt
+curl -L -o /$nuname-server/web/nginx/server/conf/start-php-81.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/start-php-81.conf.txt
+curl -L -o /$nuname-server/web/php/etc/php.ini https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/84php.ini.txt
+curl -L -o /$nuname-server/web/php/etc/php-fpm.d/fpm.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/fpm-84.conf.txt
 
-cat > /$auth-server/nginx/conf/default.conf << EOF
-server {
-	listen 80;
-    # listen [::]:80;
-	# listen 443 ssl;
-	server_name _;
-	#charset koi8-r;
-	charset utf-8;
-	#access_log  logs/host.access.log  main;
-	location / {
-		root   /$auth-server/nginx/webside/default;
-		index  index.html index.htm;
-	}
-	# if ($server_port !~ 443){
-	#     rewrite ^(/.*)$ https://$host$1 permanent;
-	# }
-	error_page 404 /404.html;
-	# redirect server error pages to the static page /50x.html
-	#
-	error_page   500 502 503 504  /50x.html;
-	location = /50x.html {
-		root  html;
-	}
-	# proxy the PHP scripts to Apache listening on 127.0.0.1:80
-	#
-	#location ~ \.php$ {
-	#    proxy_pass   http://127.0.0.1;
-	#}
-	# pass the PHP scripts to FastCGI server listening on 127.0.0.1:9000
-	#
-	#location ~ \.php$ {
-	#    root           html;
-	#    fastcgi_pass   127.0.0.1:9000;
-	#    fastcgi_index  index.php;
-	#    fastcgi_param  SCRIPT_FILENAME  /scripts$fastcgi_script_name;
-	#    include        fastcgi_params;
-	#}
-	# deny access to .htaccess files, if Apache's document root
-	# concurs with nginx's one
-	#
-	#location ~ /\.ht {
-	#    deny  all;
-	#}
-}
-EOF
-
-curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/nginx.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/nginx.conf.txt && \
-curl -L -o /nuoyis-web/nginx/webside/default/index.html https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/index.html && \
-curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/ssl/default.pem https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.pem && \
-curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/ssl/default.key https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.key && \
-curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/start-php-84.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/start-php-84.conf.txt && \
-curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/path.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/path.conf.txt && \
-curl -L -o /nuoyis-web/nginx/server/1.27.0/conf/start-php-81.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/start-php-81.conf.txt && \
-curl -L -o /nuoyis-web/php/8.4.2/etc/php.ini https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/84php.ini.txt && \
-curl -L -o /nuoyis-web/php/8.4.2/etc/php-fpm.d/fpm.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/fpm-84.conf.txt && \
-
-ln -s /$auth-server/nginx/server/sbin/nginx /usr/local/bin/
+ln -s /$nuname-server/web/nginx/server/sbin/nginx /usr/local/bin/
 cat > /etc/systemd/system/nginx.service <<EOF
 [Unit]
 Description=Nginx HTTP Server
@@ -665,29 +660,31 @@ WantedBy=multi-user.target
 EOF
 		manger::systemctl start nginx
 		elif [ $options_lnmp_value == "docker" ];then
-		   mkdir -p /nuoyis-server/web/{docker-yaml,nginx/{conf,webside/default,ssl},mariadb/{init,server,import,config}}
+		   mkdir -p /$nuname-server/web/{docker-yaml,nginx/{conf,webside/default,ssl},mariadb/{init,server,import,config}}
            install::docker
-		   useradd -M -s /sbin/nologin nuoyis-web
+		   useradd -u 2233 -m -s /sbin/nologin nuoyis-web
            if [ -z $options_mariadb_value ];then
 		        read -p "请输入mariadb root密码:" options_mariadb_value
            fi
-		   cat > /nuoyis-server/web/docker-compose.yaml << EOF
+		   cat > /$nuname-server/web/nuoyis-docker-lnmp.yaml << EOF
 version: '3'
 services:
   nuoyis-lnmp-np:
     container_name: nuoyis-lnmp-np
-    image: swr.cn-north-4.myhuaweicloud.com/nuoyis/nuoyis-lnp:v1.32
+    image: registry.cn-hangzhou.aliyuncs.com/nuoyis/nuoyis-lnmp-np:latest
     networks: 
       nuoyis-net:
         aliases:
-          - nuoyis-lnp
+          - nuoyis-lnmp-np
     ports:
       - 80:80
       - 443:443
     volumes:
-      - /nuoyis-server/web/nginx/conf:/nuoyis-web/nginx/conf
-      - /nuoyis-server/web/nginx/webside:/nuoyis-web/nginx/webside
-      - /nuoyis-server/web/nginx/ssl:/nuoyis-web/nginx/ssl
+      - /$nuname-server/web/nginx/conf:/nuoyis-web/nginx/conf
+      - /$nuname-server/web/nginx/webside:/nuoyis-web/nginx/webside
+      - /$nuname-server/web/nginx/ssl:/nuoyis-web/nginx/ssl
+      - /var/log:/nuoyis-web/logs
+    shm_size: '1g'
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost"]
       interval: 30s
@@ -698,21 +695,22 @@ services:
     restart: always
   nuoyis-lnmp-mariadb:
     container_name: nuoyis-lnmp-mariadb
-    image: mariadb:latest
+    image: docker.m.daocloud.io/mariadb:latest
     networks: 
       nuoyis-net:
         aliases:
-          - nuoyis-mariadb
+          - nuoyis-lnmp-mariadb
     environment:
       TIME_ZONE: Asia/Shanghai
       MYSQL_ROOT_PASSWORD: "$options_mariadb_value"
     volumes:
-      - /nuoyis-server/web/mariadb/init/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - /nuoyis-server/web/mariadb/server:/var/lib/mysql
-      - /nuoyis-server/web/mariadb/import:/nuoyis-web/mariadb/import
-      - /nuoyis-server/web/mariadb/config/my.cnf:/etc/mysql/my.cnf
+      - /$nuname-server/web/mariadb/init/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - /$nuname-server/web/mariadb/server:/var/lib/mysql
+      - /$nuname-server/web/mariadb/import:/nuoyis-web/mariadb/import
+      - /$nuname-server/web/mariadb/config/my.cnf:/etc/mysql/my.cnf
     ports:
       - 3306:3306
+    shm_size: '1g'
     healthcheck:
       test: ["CMD", "sh", "-c", "mariadb -u root -p$\$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM information_schema.tables LIMIT 1;'"]
       interval: 30s
@@ -720,16 +718,10 @@ services:
       start_period: 10s
       timeout: 10s
     restart: always
-  nuoyis-lnmp-autoheal:
-    container_name: nuoyis-lnmp-autoheal
-    image: willfarrell/autoheal
-    environment:
-      - AUTOHEAL_CONTAINER_LABEL=all
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    restart: always
+  
 networks:
   nuoyis-net:
+    name: nuoyis-net
     driver: bridge
     ipam:
       driver: default
@@ -737,10 +729,10 @@ networks:
         - subnet: 192.168.223.0/24
           gateway: 192.168.223.1
 EOF
-cat > /nuoyis-server/web/nginx/webside/default/index.html << EOF
+cat > /$nuname-server/web/nginx/webside/default/index.html << EOF
 welcome to nuoyis's server
 EOF
-cat > /nuoyis-server/web/mariadb/config/my.cnf << EOF
+cat > /$nuname-server/web/mariadb/config/my.cnf << EOF
 [mysqld]
 server-id=1
 log_bin=mysql-bin
@@ -750,10 +742,10 @@ EOF
     docker rm -f nuoyis-lnmp-np
 	docker rm -f nuoyis-lnmp-mariadb
 	docker rm -f nuoyis-lnmp-autoheal
-    docker-compose -f /nuoyis-server/web/docker-compose.yaml up -d
+    docker-compose -f /$nuname-server/web/nuoyis-docker-lnmp.yaml up -d
     	fi
 	else
-		manager::yuminstall install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
+		manager::yum install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
 	fi
 }
 
@@ -812,9 +804,9 @@ if [ $PM = "yum" ];then
 					osname="rockylinux"
 				fi
 			fi
-            cat > /etc/yum.repos.d/$auth.repo << EOF
-[${auth}-BaseOS]
-name=${auth} - BaseOS
+            cat > /etc/yum.repos.d/$nuname.repo << EOF
+[${nuname}-BaseOS]
+name=${nuname} - BaseOS
 baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/\$basearch/os/
 gpgcheck=1
 gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
@@ -823,8 +815,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${auth}-baseos-debuginfo]
-name=${auth} - BaseOS - Debug
+[${nuname}-baseos-debuginfo]
+name=${nuname} - BaseOS - Debug
 baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/\$basearch/debug/tree/
 gpgcheck=1
 gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
@@ -833,8 +825,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${auth}-baseos-source]
-name=${auth} - BaseOS - Source
+[${nuname}-baseos-source]
+name=${nuname} - BaseOS - Source
 baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/source/tree/
 gpgcheck=1
 gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
@@ -843,8 +835,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${auth}-appstream]
-name=${auth} - AppStream
+[${nuname}-appstream]
+name=${nuname} - AppStream
 baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/\$basearch/os/
 gpgcheck=1
 gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
@@ -853,8 +845,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${auth}-appstream-debuginfo]
-name=${auth} - AppStream - Debug
+[${nuname}-appstream-debuginfo]
+name=${nuname} - AppStream - Debug
 baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/\$basearch/debug/tree/
 gpgcheck=1
 gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
@@ -863,8 +855,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${auth}-appstream-source]
-name=${auth} - AppStream - Source
+[${nuname}-appstream-source]
+name=${nuname} - AppStream - Source
 baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/source/tree/
 gpgcheck=1
 gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
@@ -873,8 +865,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${auth}-crb]
-name=${auth} - CRB
+[${nuname}-crb]
+name=${nuname} - CRB
 baseurl=https://${yumurl}/${osname}/${osversion}/CRB/\$basearch/os/
 gpgcheck=1
 gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
@@ -883,8 +875,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${auth}-crb-debuginfo]
-name=${auth} - CRB - Debug
+[${nuname}-crb-debuginfo]
+name=${nuname} - CRB - Debug
 baseurl=https://${yumurl}/${osname}/${osversion}/CRB/\$basearch/debug/tree/
 gpgcheck=1
 gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
@@ -893,8 +885,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${auth}-crb-source]
-name=${auth} - CRB - Source
+[${nuname}-crb-source]
+name=${nuname} - CRB - Source
 baseurl=https://${yumurl}/${osname}/${osversion}/CRB/source/tree/
 gpgcheck=1
 gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
@@ -907,19 +899,19 @@ EOF
 			echo "skip_broken=True" >> /etc/dnf/dnf.conf
 
 			echo "正在配置附加源"
-			manager::yuminstall installcheck epel
+			manager::yum installcheck epel
 			if [ $? -eq 0 ];then
-				manager::yuminstall remove epel-release epel-next-release
+				manager::yum remove epel-release epel-next-release
 			fi
 
-			manager::yuminstall installcheck remi
+			manager::yum installcheck remi
 			if [ $? -eq 0 ];then
-				manager::yuminstall remove remi-release-9.4-2.el9.remi.noarch
+				manager::yum remove remi-release-9.4-2.el9.remi.noarch
 			fi
 
-			manager::yuminstall installcheck elrepo
+			manager::yum installcheck elrepo
 			if [ $? -eq 0 ];then
-				manager::yuminstall remove elrepo-release.noarch
+				manager::yum remove elrepo-release.noarch
 			fi
 
 			rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
@@ -933,7 +925,7 @@ EOF
 			sed -e 's/http:\/\/elrepo.org\/linux/https:\/\/mirrors.aliyun.com\/elrepo/g' \
 			    -e 's/mirrorlist=/#mirrorlist=/g' \
 				-i /etc/yum.repos.d/elrepo.repo
-			manager::yuminstall install https://shell.nuoyis.net/download/remi-release-9.rpm
+			manager::yum install https://shell.nuoyis.net/download/remi-release-9.rpm
 			sed -e 's|^mirrorlist=|#mirrorlist=|g' \
 			-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
 			-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
@@ -953,9 +945,9 @@ EOF
 	# 红帽系统特调
 	if [ $system_name == "Red" ];then
 		echo "正在对RHEL系统进行openssl系统特调"
-		manager::yuminstall remove subscription-manager-gnome     
-		manager::yuminstall remove subscription-manager-firstboot     
-		manager::yuminstall remove subscription-manager
+		manager::yum remove subscription-manager-gnome     
+		manager::yum remove subscription-manager-firstboot     
+		manager::yum remove subscription-manager
 		rpm -e --nodeps openssl-fips-provider
 		rpm -e --nodeps redhat-logos
 		rpm -e --nodeps redhat-release
@@ -976,7 +968,7 @@ EOF
 		rm -rf /etc/yum.repos.d/rocky*.repo
 		# 可视化处理
 		# sudo dnf groupinstall "Server with GUI"
-		# manager::yuminstall install https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+		# manager::yum install https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
 		if [ -d /sys/firmware/efi ] && [ -d /boot/efi/EFI/redhat ];then
 			echo "你的Boot分区为EFI，正在进行特别优化"
 			mv /boot/efi/EFI/redhat/ /boot/efi/EFI/rocky
@@ -993,19 +985,41 @@ EOF
 
 	echo "正在更新源"
 	rm -rf /etc/yum.repods.d/*.rpmsave
-	manager::yuminstall clean
-	manager::yuminstall update
-	manager::yuminstall makecache
+	manager::yum clean
+	manager::yum update
+	manager::yum makecache
 }
 
-
+install::kernel(){
+echo "内核更最新"
+if [ $PM = "yum" ];then
+manager::yum installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml.x86_64
+manager::yum remove kernel-tools-libs.x86_64 kernel-tools.x86_64
+manager::yum installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml-tools.x86_64
+else
+	# https://zichen.zone/archives/debian_linux_kernel_update.html
+	manager::yum install linux-image-amd64 linux-headers-amd64
+fi
+cat > /nuoyis-server/shell/kernel-update.sh << EOF
+#!/bin/bash
+yum clean all;
+yum upgrade -y;
+yes | dnf --disablerepo=\* --enablerepo=elrepo-kernel update kernel-ml*;
+yes | dnf remove --oldinstallonly --setopt installonly_limit=2 kernel;
+# 0 0 * * 1 bash /nuoyis-server/shell/kernel-update.sh > /nuoyis-server/logs/update.log 2>&1;
+EOF
+cat >> /etc/crontab << EOF
+0 0 * * 1 bash /nuoyis-server/shell/kernel-update.sh > /nuoyis-server/logs/update.log 2>&1;
+EOF
+}
 
 install::main(){
+echo "核心函数检查和安装"
 echo "检测hostname是否设置"
 HOSTNAME_CHECK=$(cat /etc/hostname)
 if [ -z $HOSTNAME_CHECK ];then
 	echo "当前主机名hostname为空，设置默认hostname"
-	hostnamectl set-hostname $auth-init-shell
+	hostnamectl set-hostname $nuname-init-shell
 fi
 
 echo "正在检查版本是否支持"
@@ -1029,13 +1043,13 @@ if [ $PM == "yum" ] && [ $system_name != "openEuler" ];then
 					options_source_installer
 					# https://www.rockylinux.cn/notes/strong-rocky-linux-8-sheng-ji-zhi-rocky-linux-9-strong.html
 					# 安装 epel 源
-					manager::yuminstall epel-release
+					manager::yum epel-release
 					
 					# 更新系统至最新版
-					manager::yuminstall update
+					manager::yum update
 
 					# 安装 rpmconf 和 yum-utils
-					manager::yuminstall rpmconf yum-utils
+					manager::yum rpmconf yum-utils
 					
 					# 执行 rpmconf，如果出现提示信息，请输入 Y 和回车继续，如果没提示继续。
 					yes | rpmconf -a
@@ -1058,15 +1072,15 @@ if [ $PM == "yum" ] && [ $system_name != "openEuler" ];then
 					yes | rpm --rebuilddb
 					
 					# 安装新内核
-					manager::yuminstall install kernel
-					manager::yuminstall install kernel-core
-					manager::yuminstall install shim
+					manager::yum install kernel
+					manager::yum install kernel-core
+					manager::yum install shim
 					
 					# 安装基础环境
-					manager::yuminstall installfull group minimal-environment
+					manager::yum installfull group minimal-environment
 					
 					# 安装 rpmconf 和 yum-utils
-					manager::yuminstall install rpmconf yum-utils
+					manager::yum install rpmconf yum-utils
 					
 					# 执行 rpmconf，根据提示一直输入 Y 和回车即可
 					rpmconf -a
@@ -1076,7 +1090,7 @@ if [ $PM == "yum" ] && [ $system_name != "openEuler" ];then
 					grub2-mkconfig -o $grubcfg/grub.cfg
 					
 					# 更新系统
-					manager::yuminstall update
+					manager::yum update
 					
 					# 重启系统
 					reboot
@@ -1100,26 +1114,17 @@ if [ -n "$swap_file" ];then
 	echo "虚拟内存已存在"
 else
     memory=`free -m | awk '/^Mem:/ {print $2}'`
-    if [ $memory -lt 1024 ] && [ $options_swap -eq 1 ];then
+    if [ $memory -lt 1024 ] || [ $options_swap -eq 1 ];then
         echo "设置虚拟内存"
-        if [ $memory -lt 2048 ];then
-            if [ $memory -lt 1024 ];then
-                memory=1024
-            else
-                memory=2048
-            fi
-            if [ -z $options_swap_value ];then
-                swapsize=$[memory*2];
-            else
-                swapsize=$options_swap_value
-            fi
+        if [ -z $options_swap_value ];then
+            swapsize=$[1024*2];
+        else
+            swapsize=$options_swap_value
+        fi
             cat > /etc/sysctl.conf << EOF
 $(egrep -v '^vm.swappiness' /etc/sysctl.conf)
 EOF
-            echo "vm.swappiness=60" >> /etc/sysctl.conf
-        else
-            swapsize=4096;
-        fi
+        echo "vm.swappiness=60" >> /etc/sysctl.conf
         dd if=/dev/zero of=/nuoyis-toolbox-swap bs=1M count=$swapsize
         chmod 0600 /nuoyis-toolbox-swap
         mkswap -f /nuoyis-toolbox-swap
@@ -1134,15 +1139,46 @@ echo "创建临时安装文件夹nuoyis-install"
 mkdir -p /nuoyis-install
 cd /nuoyis-install
 
-echo "创建$auth 服务核心文件夹"
-mkdir -p /$auth-server/{openssl,logs,shell}
+echo "创建$nuname 服务核心文件夹"
+mkdir -p /$nuname-server/{openssl,logs,shell}
 # for i in 
-# touch /$auth-server/
+# touch /$nuname-server/
+}
+
+conf::tuning(){
+echo "系统调优"
+manger::systemctl start tuned.service
+tuned-adm profile `tuned-adm recommend`
+for nsysctl in net.core.default_qdisc net.ipv4.tcp_congestion_control kernel.sysrq net.ipv4.neigh.default.gc_stale_time net.ipv4.conf.all.rp_filter net.ipv4.conf.default.rp_filter net.ipv4.conf.default.arp_announce net.ipv4.conf.lo.arp_announce net.ipv4.conf.all.arp_announce net.ipv4.tcp_max_tw_buckets net.ipv4.tcp_syncookies net.ipv4.tcp_max_syn_backlog net.ipv4.tcp_synack_retries net.ipv4.tcp_slow_start_after_idle
+do
+    sed -i "/^${nsysctl}/d" /etc/sysctl.conf
+done
+cat >> /etc/sysctl.conf << EOF
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+kernel.sysrq = 1
+net.ipv4.neigh.default.gc_stale_time = 120
+net.ipv4.conf.all.rp_filter = 0
+net.ipv4.conf.default.rp_filter = 0
+net.ipv4.conf.default.arp_announce = 2
+net.ipv4.conf.lo.arp_announce = 2
+net.ipv4.conf.all.arp_announce = 2
+net.ipv4.tcp_max_tw_buckets = 5000
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_max_syn_backlog = 1024
+net.ipv4.tcp_synack_retries = 2
+net.ipv4.tcp_slow_start_after_idle = 0
+EOF
+sysctl -p
 }
 
 # 参数解析
-while [[ "${1:-}" != "" ]]; do
+while [[ $# -gt 0 ]]; do
     case "$1" in
+		-n|--name)
+			nuname=$2
+			shift 2
+			;;
         -host|--hostname)
             hostnamectl set-hostname $2
             shift 2
@@ -1169,6 +1205,14 @@ while [[ "${1:-}" != "" ]]; do
             # install::lnmp
             shift 2
             ;;
+		-tu|--tuning)
+			options_tuning=1
+			shift 2
+			;;
+		-ku|--kernelupdate)
+			options_kernel_update=1
+			shift 1
+			;;
         -sw|--swap)
             options_swap_value=$2
             options_swap=1
@@ -1178,12 +1222,12 @@ while [[ "${1:-}" != "" ]]; do
             options_mariadb_value=$2
             shift 2
             ;;
-        -do|--docker)
+        -do|--dockerinstall)
             # install::docker
             options_docker=1
             shift 2
             ;;
-        -n|--nas)
+        -na|--nas)
             # install::nas
             options_nas=1
             shift 2
@@ -1191,6 +1235,10 @@ while [[ "${1:-}" != "" ]]; do
         -oll|--ollama)
             options_ollama=1
             shift 2
+            ;;
+        -bt|--btpanelenable)
+            options_bt=1
+            shift
             ;;
         -h|--help)
             help::main
@@ -1218,6 +1266,18 @@ install::main
 
 if [[ "${options_yum:-0}" -eq 1 ]]; then
   conf::yumsource
+fi
+
+if [[ "${options_bt:-0}" -eq 1 ]]; then
+  install::bt
+fi
+
+if [[ "${options_kernel_update:-0}" -eq 1 ]]; then
+  install::kernel
+fi
+
+if [[ "${options_tuning:-0}" -eq 1 ]]; then
+  conf::tuning
 fi
 
 if [[ "${options_lnmp:-0}" -eq 1 ]]; then
