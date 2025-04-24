@@ -3,7 +3,7 @@
 # Version:       : v1.5
 # Description    : Linux quick initialization and installation
 # Create Date    : 2025-04-23
-# nunameor         : nuoyis
+# auth           : nuoyis
 # Webside        : blog.nuoyis.net
 
 LANG=en_US.UTF-8
