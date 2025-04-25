@@ -1207,11 +1207,11 @@ while [[ $# -gt 0 ]]; do
             ;;
 		-tu|--tuning)
 			options_tuning=1
-			shift 2
+			shift
 			;;
 		-ku|--kernelupdate)
 			options_kernel_update=1
-			shift 1
+			shift
 			;;
         -sw|--swap)
             options_swap_value=$2
@@ -1225,16 +1225,16 @@ while [[ $# -gt 0 ]]; do
         -do|--dockerinstall)
             # install::docker
             options_docker=1
-            shift 2
+            shift
             ;;
         -na|--nas)
             # install::nas
             options_nas=1
-            shift 2
+            shift
             ;;
         -oll|--ollama)
             options_ollama=1
-            shift 2
+            shift
             ;;
         -bt|--btpanelenable)
             options_bt=1
