@@ -826,7 +826,7 @@ if [ $PM = "yum" ];then
 			mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
 			mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
 			if [ "$options_yum_install" == "edu" ];then
-				yumurl="mirrors.jcut.edu.cn"
+				yumurl="mirrors.cernet.edu.cn"
 				if [ $system_name = "Rocky" ]; then
 					osname="rocky"
 				fi
