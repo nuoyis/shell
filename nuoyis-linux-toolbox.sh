@@ -43,35 +43,6 @@ elif command -v apt-get > /dev/null 2>&1 && command -v dpkg > /dev/null 2>&1; th
     PM="apt"
 fi
 
-help::main(){
-IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
-  -n, --name           yum name and folder name
-  -host,--hostname     default is options_toolbox_init,so you have use this options before install
-  -r,  --mirror        yum mirrors update,if you not used, it will not be executed. Options: edu aliyun other
-  -ln, --lnmp          install nuoyis version lnmp. Options: gcc docker yum
-  -bt, --btpanelenable install bt panel
-  -tu, --tuning	       linux system tuning
-  -ku, --kernelupdate  use elrepo to update kernel
-  -sw, --swap          Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
-  -mp, --mysqlpassword nuoyis-lnmp-np password set  
-  -do, --dockerinstall install docker
-  -na, --nas           install vsftpd nginx and nfs
-  -oll, --ollama       install ollama
-  -h,  --help          show shell help
-EOF
-
-echo "use: $0 [command]..."
-echo
-echo "command:"
-# 遍历并输出
-for line in "${help_lines[@]}"; do
-    echo "$line"
-done
-exit 0
-}
-
-[ "$#" == "0" ] && help::main
-
 manager::download(){
 	if [ -f /usr/bin/curl ];then
 		curl -sSOLk $1;
@@ -80,7 +51,7 @@ manager::download(){
 	fi;
 }
 
-manger::systemctl(){
+manager::systemctl(){
 	if [ -n $1 ] && [ -n $2 ];then
 		case $1 in
 			"start")
@@ -348,16 +319,16 @@ EOF
 
 cat >> /etc/profile << EOF
 echo "################################"
-echo "#  Welcome  to  nuoyis's  NAS  #"
+echo "#  Welcome  to  $nuname's  NAS  #"
 echo "################################"
 EOF
 
-cat > /$nuname-server/nginx/conf/default.conf << EOF
+cat > /$nuname-server/web/nginx/server/conf/nginx.conf << EOF
 server {
 	listen 80;
-    # listen [::]:80;
+    listen [::]:80;
 	# listen 443 ssl;
-	server_name localhost;
+	server_name _;
 	#charset koi8-r;
 	charset utf-8;
 	location /nuoyisnb {
@@ -377,7 +348,7 @@ server {
                 sendfile_max_chunk 1m;                # 每个sendfile调用的最大传输量为1MB
                 tcp_nopush on;                        # 启用最小传输限制功能
         
-        #      aio on;                               # 启用异步传输
+        #       aio on;                               # 启用异步传输
                 directio 5m;                          # 当文件大于5MB时以直接读取磁盘的方式读取文件
                 directio_alignment 4096;              # 与磁盘的文件系统对齐
                 output_buffers 4 32k;                 # 文件输出的缓冲区大小为128KB
@@ -394,11 +365,12 @@ server {
 }
 EOF
 systemctl reload nginx
-manger::systemctl start vsftpd smb nmb
+manager::systemctl start vsftpd smb nmb
 }
 
 install::docker(){
-echo "安装Docker"
+	echo "安装Docker"
+	mkdir -p /$nuname-server/docker-yaml/
 	if [ $PM = "yum" ];then
 	manager::yum install yum-utils device-mapper-persistent-data lvm2
 	manager::yum repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
@@ -443,8 +415,69 @@ echo "安装Docker"
   ]
 }
 EOF
-	manger::systemctl start docker
+	manager::systemctl start docker
 	curl -L "https://hub.gitmirror.com/https://github.com/docker/compose/releases/download/v2.32.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
+}
+
+install::dockerapp(){
+	cat > /nuoyis-server/docker-yaml/app.yaml <<EOF
+version: '3'
+services:
+  nuoyis-app-alist:
+    container_name: alist
+    image: docker.m.daocloud.io/xhofe/alist:latest
+    volumes:
+      - /nuoyis-server/alist/data:/opt/alist/data
+    ports:
+      - 5244:5244
+    environment:
+      - PUID=0
+      - PGID=0
+      - UMASK=022
+    restart: always
+  nuoyis-app-qinglong:
+    container_name: qinglong
+    image: docker.m.daocloud.io/whyour/qinglong:debian
+    volumes:
+      - /nuoyis-server/qinglong/data:/ql/data
+    ports:
+      - 5700:5700
+    environment:
+      QlBaseUrl: '/'
+    restart: always
+  nuoyis-app-certd:
+    image: registry.cn-shenzhen.aliyuncs.com/handsfree/certd:latest
+    container_name: certd
+    ports:
+      - 7001:7001
+      - 7002:7002
+    volumes:
+      - /nuoyis-server/certd:/app/data
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    environment:
+      - certd_system_resetAdminPasswd=false
+    restart: always
+  nuoyis-lnmp-autorestart:
+    container_name: nuoyis-apps-autorestart
+    image: docker.m.daocloud.io/willfarrell/autoheal
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=all
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+  nuoyis-apps-autoupdate:
+    command: '--cleanup -i 3600'
+    image: docker.m.daocloud.io/containrrr/watchtower
+    volumes:
+      - '/etc/docker/daemon.json:/etc/docker/daemon.json'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+    environment:
+      - TZ=Asia/Shanghai
+    container_name: nuoyis-apps-autoupdate
+    restart: always
+EOF
+docker-compose -f /$nuname-server/docker-yaml/app.yaml up -d
 }
 
 install::ollama(){
@@ -458,7 +491,7 @@ install::lnmp(){
 	if [ $PM = "yum" ];then
 		aboutserver=`systemctl is-active firewalld`
 		if [ $aboutserver == "inactive" ];then
-			manger::systemctl start firewalld
+			manager::systemctl start firewalld
 		fi
 		firewall-cmd --set-default-zone=public
 		firewall-cmd --zone=public --add-service=http --per
@@ -469,7 +502,7 @@ install::lnmp(){
 			yes | dnf module reset php
 			yes | dnf module install php:remi-8.4
 			manager::yum install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb-server
-			manger::systemctl start nginx php-fpm mariadb
+			manager::systemctl start nginx php-fpm mariadb
 			# ln -sf 
 		elif [ $options_lnmp_value == "gcc" ];then
 			# 编译安装
@@ -630,7 +663,7 @@ http {
     }
 
     # 其他相关配置
-    include /nuoyis-web/nginx/conf/*.conf;
+    include /$nuname-server/web/nginx/conf/*.conf;
 }
 EOF
 curl -L -o /$nuname-server/web/nginx/webside/default/index.html https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/index.html
@@ -658,15 +691,14 @@ PrivateTmp=true
 [Install]
 WantedBy=multi-user.target
 EOF
-		manger::systemctl start nginx
+		manager::systemctl start nginx
 		elif [ $options_lnmp_value == "docker" ];then
 		   mkdir -p /$nuname-server/web/{docker-yaml,nginx/{conf,webside/default,ssl},mariadb/{init,server,import,config}}
-           install::docker
 		   useradd -u 2233 -m -s /sbin/nologin nuoyis-web
            if [ -z $options_mariadb_value ];then
 		        read -p "请输入mariadb root密码:" options_mariadb_value
            fi
-		   cat > /$nuname-server/web/nuoyis-docker-lnmp.yaml << EOF
+		   cat > /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml << EOF
 version: '3'
 services:
   nuoyis-lnmp-np:
@@ -742,7 +774,7 @@ EOF
     docker rm -f nuoyis-lnmp-np
 	docker rm -f nuoyis-lnmp-mariadb
 	docker rm -f nuoyis-lnmp-autoheal
-    docker-compose -f /$nuname-server/web/nuoyis-docker-lnmp.yaml up -d
+    docker-compose -f /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml up -d
     	fi
 	else
 		manager::yum install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
@@ -1143,11 +1175,14 @@ echo "创建$nuname 服务核心文件夹"
 mkdir -p /$nuname-server/{openssl,logs,shell}
 # for i in 
 # touch /$nuname-server/
+
+echo "安装核心软件包"
+manager::yum install dnf-plugins-core python3 pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils
 }
 
 conf::tuning(){
 echo "系统调优"
-manger::systemctl start tuned.service
+manager::systemctl start tuned.service
 tuned-adm profile `tuned-adm recommend`
 for nsysctl in net.core.default_qdisc net.ipv4.tcp_congestion_control kernel.sysrq net.ipv4.neigh.default.gc_stale_time net.ipv4.conf.all.rp_filter net.ipv4.conf.default.rp_filter net.ipv4.conf.default.arp_announce net.ipv4.conf.lo.arp_announce net.ipv4.conf.all.arp_announce net.ipv4.tcp_max_tw_buckets net.ipv4.tcp_syncookies net.ipv4.tcp_max_syn_backlog net.ipv4.tcp_synack_retries net.ipv4.tcp_slow_start_after_idle
 do
@@ -1172,13 +1207,43 @@ EOF
 sysctl -p
 }
 
+help::main(){
+IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
+  -n, --name           yum name and folder name
+  -host,--hostname     default is options_toolbox_init,so you have use this options before install
+  -r,  --mirror        yum mirrors update,if you not used, it will not be executed. Options: edu aliyun other
+  -ln, --lnmp          install nuoyis version lnmp. Options: gcc docker yum
+  -bt, --btpanelenable install bt panel
+  -tu, --tuning	       linux system tuning
+  -ku, --kernelupdate  use elrepo to update kernel
+  -sw, --swap          Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
+  -mp, --mysqlpassword nuoyis-lnmp-np password set  
+  -do, --dockerinstall install docker
+  -doa, --dockerapp    install docker app (qinglong and alist ...)
+  -na, --nas           install vsftpd nginx and nfs
+  -oll, --ollama       install ollama
+  -h,  --help          show shell help
+EOF
+
+echo "use: $0 [command]..."
+echo
+echo "command:"
+# 遍历并输出
+for line in "${help_lines[@]}"; do
+    echo "$line"
+done
+exit 0
+}
+
+[ "$#" == "0" ] && help::main
+
 # 参数解析
 while [[ $# -gt 0 ]]; do
     case "$1" in
-		-n|--name)
-			nuname=$2
-			shift 2
-			;;
+        -n|--name)
+            nuname=$2
+            shift 2
+            ;;
         -host|--hostname)
             hostnamectl set-hostname $2
             shift 2
@@ -1225,6 +1290,11 @@ while [[ $# -gt 0 ]]; do
         -do|--dockerinstall)
             # install::docker
             options_docker=1
+            shift
+            ;;
+        -doa|--dockerapp)
+            # install::docker
+            options_docker_app=1
             shift
             ;;
         -na|--nas)
@@ -1281,6 +1351,9 @@ if [[ "${options_tuning:-0}" -eq 1 ]]; then
 fi
 
 if [[ "${options_lnmp:-0}" -eq 1 ]]; then
+  if [ $options_lnmp_value == "docker" ];then
+	install::docker
+  fi
   install::lnmp
 fi
 
@@ -1288,7 +1361,15 @@ if [[ "${options_docker:-0}" -eq 1 ]]; then
   install::docker
 fi
 
+if [[ "${options_docker_app:-0}" -eq 1 ]]; then
+  install::dockerapp
+fi
+
 if [[ "${options_nas:-0}" -eq 1 ]]; then
+  if [ -z $options_lnmp ];then
+  	options_lnmp_value=gcc
+  	install::lnmp
+  fi
   install::nas
 fi
 

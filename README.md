@@ -9,9 +9,28 @@
 ```
 curl -sSO https://shell.nuoyis.net/nuoyis-init.sh;bash nuoyis-init.sh
 ```
-2. Ubuntu root登录解锁脚本  
-一个解锁ubuntu root的小脚本  
-执行命令:  
+2. Linux toolbox
+
+  一个linux工具箱(从初始化脚本独立出来的)
+
+  安装方法
+
+  ```
+  curl -L -o /usr/bin/toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
+  chmod +x /usr/bin/toolbox
+  ```
+
+  部分使用案例(设置全局自定义名，设置主机名，使用阿里源，安装docker，更新最新内核并自动更新，调优)
+
+  ```
+  toolbox -n nuoyis -host nuoyis -r aliyun -ln docker -ku -tu
+  ```
+
+  
+
+3. Ubuntu root登录解锁脚本  
+  一个解锁ubuntu root的小脚本  
+  执行命令:  
 ```
 curl -sSO https://shell.nuoyis.net/ubuntu-rootstart.sh;bash ubuntu-rootstart.sh
 ```
