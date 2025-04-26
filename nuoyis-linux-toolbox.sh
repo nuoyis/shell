@@ -1332,11 +1332,11 @@ if [ $whois != "root" ];then
 fi
 
 # 下面开始依据变量值执行函数
-install::main
-
 if [[ "${options_yum:-0}" -eq 1 ]]; then
   conf::yumsource
 fi
+
+install::main
 
 if [[ "${options_bt:-0}" -eq 1 ]]; then
   install::bt
