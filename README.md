@@ -20,10 +20,10 @@ curl -sSO https://shell.nuoyis.net/nuoyis-init.sh;bash nuoyis-init.sh
   chmod +x /usr/bin/toolbox
   ```
 
-  部分使用案例(设置全局自定义名，设置主机名，使用阿里源，安装docker，更新最新内核并自动更新，调优)
+  部分使用案例(设置全局自定义名，设置主机名，使用阿里源，安装lnmp版本docker，安装docker常用的app, 更新最新内核并自动更新，调优)
 
   ```
-  toolbox -n nuoyis -host nuoyis -r aliyun -ln docker -ku -tu
+  toolbox -n nuoyis -host nuoyis -r aliyun -ln docker -doa -ku -tu
   ```
 
   
