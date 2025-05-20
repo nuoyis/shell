@@ -16,8 +16,8 @@ curl -sSO https://shell.nuoyis.net/nuoyis-init.sh;bash nuoyis-init.sh
   安装方法
 
   ```
-  curl -L -o /usr/bin/toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
-  chmod +x /usr/bin/toolbox
+  curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
+  chmod +x /usr/bin/nuoyis-toolbox
   ```
 
   部分使用案例(设置全局自定义名，设置主机名，使用阿里源，安装lnmp版本docker，安装docker常用的app, 更新最新内核并自动更新，调优)
@@ -29,8 +29,8 @@ curl -sSO https://shell.nuoyis.net/nuoyis-init.sh;bash nuoyis-init.sh
   
 
 3. Ubuntu root登录解锁脚本  
-  一个解锁ubuntu root的小脚本  
-  执行命令:  
+    一个解锁ubuntu root的小脚本  
+    执行命令:  
 ```
 curl -sSO https://shell.nuoyis.net/ubuntu-rootstart.sh;bash ubuntu-rootstart.sh
 ```

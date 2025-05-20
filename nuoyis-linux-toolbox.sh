@@ -3,9 +3,13 @@
 # Version:       : v1.5
 # Description    : Linux quick initialization and installation
 # Create Date    : 2025-04-23
+# Update Date    : 2025-05-20
 # auth           : nuoyis
 # Webside        : blog.nuoyis.net
 
+# 版本号
+version="1.2"
+# 语言设置
 LANG=en_US.UTF-8
 #变量定义区域
 #手动变量定义区域
@@ -24,6 +28,25 @@ nuo_setnetwork_shell=$(ip a | grep -oE "inet ([0-9]{1,3}.){3}[0-9]{1,3}" | awk '
 system_name=`head -n 1 /etc/os-release | grep -oP '(?<=NAME=").*(?=")' | awk '{print$1}'`
 system_version=`cat /etc/os-release | grep -oP '(?<=VERSION_ID=").*(?=")'`
 system_version=${system_version%.*}
+# 加速器列表
+mirrors=(
+  "https://study-download.nuoyis.net/github"
+  "https://ghproxy.com"
+  "https://raw.fastgit.org"
+  "https://gh-proxy.com"
+  "https://raw.githubusercontent.com"
+)
+
+for mirror in "${MIRRORS[@]}"; do
+    test_url="${mirror}/nuoyis/shell/refs/heads/main/nuoyis-linux-toolbox.sh"
+    if curl -fsI "$test_url" >/dev/null; then
+		updateurl=$test_url
+		break
+    fi
+done
+shell_localhost="/usr/bin/nuoyis-toolbox"
+REMOTE_HASH=$(curl -sL "$updateurl" | sha256sum | awk '{print $1}')
+LOCAL_HASH=$(sha256sum "$shell_localhost" | awk '{print $1}')
 
 # 检测包管理器
 if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
@@ -1207,24 +1230,40 @@ EOF
 sysctl -p
 }
 
-help::main(){
+update::shell(){
+if [ "$REMOTE_HASH" != "$LOCAL_HASH" ]; then
+    echo "shell will update"
+	curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
+	chmod +x /usr/bin/nuoyis-toolbox
+	echo "shell is updated"
+else
+    echo "shell is already up to date"
+fi
+
+}
+
+show::help(){
 IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
-  -n, --name           yum name and folder name
-  -host,--hostname     default is options_toolbox_init,so you have use this options before install
-  -r,  --mirror        yum mirrors update,if you not used, it will not be executed. Options: edu aliyun other
   -ln, --lnmp          install nuoyis version lnmp. Options: gcc docker yum
-  -bt, --btpanelenable install bt panel
-  -tu, --tuning	       linux system tuning
-  -ku, --kernelupdate  use elrepo to update kernel
-  -sw, --swap          Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
-  -mp, --mysqlpassword nuoyis-lnmp-np password set  
   -do, --dockerinstall install docker
   -doa, --dockerapp    install docker app (qinglong and alist ...)
   -na, --nas           install vsftpd nginx and nfs
   -oll, --ollama       install ollama
+  -bt, --btpanelenable install bt panel
+  -ku, --kernelupdate  install use elrepo to update kernel
+  -n, --name           config yum name and folder name
+  -host,--hostname     config default is options_toolbox_init,so you have use this options before install
+  -r,  --mirror        config yum mirrors update,if you not used, it will not be executed. Options: edu aliyun other
+  -tu, --tuning	       config linux system tuning
+  -sw, --swap          config Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
+  -mp, --mysqlpassword config nuoyis-lnmp-np password set  
   -h,  --help          show shell help
+  -v,  --version       show version
+  -sha, --sha256sum    show shell's sha256sum
 EOF
 
+echo "welcome to use nuoyis's toolbox"
+echo "Blog: https://blog.nuoyis.net"
 echo "use: $0 [command]..."
 echo
 echo "command:"
@@ -1235,7 +1274,7 @@ done
 exit 0
 }
 
-[ "$#" == "0" ] && help::main
+[ "$#" == "0" ] && show::help
 
 # 参数解析
 while [[ $# -gt 0 ]]; do
@@ -1251,7 +1290,7 @@ while [[ $# -gt 0 ]]; do
         -r|--mirror)
             if [[ "$2" != "aliyun" && "$2" != "edu" && "$2" != "other" ]]; then
                 echo "unknown volume: $2"
-                help::main
+                show::help
                 exit 1
             fi
             options_yum_install=$2
@@ -1262,7 +1301,7 @@ while [[ $# -gt 0 ]]; do
         -ln|--lnmp)
             if [[ "$2" != "gcc" && "$2" != "docker" && "$2" != "yum" ]]; then
                 echo "unknown volume: $2"
-                help::main
+                show::help
                 exit 1
             fi
             options_lnmp_value=$2
@@ -1310,16 +1349,32 @@ while [[ $# -gt 0 ]]; do
             options_bt=1
             shift
             ;;
+		-v|--version)
+			echo $version
+			exit 0
+			shift
+			;;
+		-up|--update)
+			update::shell
+			exit 0
+			shift
+			;;
+		-sha|--sha256sum)
+			echo "shell latest version sha256sum: $REMOTE_HASH"
+			echo "shell local version sha256sum: $LOCAL_HASH"
+			exit 0
+			shift
+			;;
         -h|--help)
-            help::main
+            show::help
             ;;
         -*)
             echo "unknown command: $1"
-            help::main
+            show::help
             ;;
         *)
             echo "unknown Options: $1"
-            help::main
+            show::help
             ;;
     esac
 done
