@@ -28,25 +28,6 @@ nuo_setnetwork_shell=$(ip a | grep -oE "inet ([0-9]{1,3}.){3}[0-9]{1,3}" | awk '
 system_name=`head -n 1 /etc/os-release | grep -oP '(?<=NAME=").*(?=")' | awk '{print$1}'`
 system_version=`cat /etc/os-release | grep -oP '(?<=VERSION_ID=").*(?=")'`
 system_version=${system_version%.*}
-# 加速器列表
-mirrors=(
-  "https://study-download.nuoyis.net/github"
-  "https://ghproxy.com"
-  "https://raw.fastgit.org"
-  "https://gh-proxy.com"
-  "https://raw.githubusercontent.com"
-)
-
-for mirror in "${MIRRORS[@]}"; do
-    test_url="${mirror}/nuoyis/shell/refs/heads/main/nuoyis-linux-toolbox.sh"
-    if curl -fsI "$test_url" >/dev/null; then
-		updateurl=$test_url
-		break
-    fi
-done
-shell_localhost="/usr/bin/nuoyis-toolbox"
-REMOTE_HASH=$(curl -sL "$updateurl" | sha256sum | awk '{print $1}')
-LOCAL_HASH=$(sha256sum "$shell_localhost" | awk '{print $1}')
 
 # 检测包管理器
 if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
@@ -1230,8 +1211,31 @@ EOF
 sysctl -p
 }
 
+show::githuburl(){
+	# 加速器列表
+mirrors=(
+  "https://study-download.nuoyis.net/github"
+  "https://ghproxy.com"
+  "https://raw.fastgit.org"
+  "https://gh-proxy.com"
+  "https://raw.githubusercontent.com"
+)
+
+for mirror in "${mirrors[@]}"; do
+	curl -sSk -o /dev/null "${mirror}/https://raw.githubusercontent.com/nuoyis/shell/refs/heads/main/nuoyis-linux-toolbox.sh"
+	if [ $? -eq 0 ];then
+    	updateurl=$test_url
+		break
+    fi
+done
+shell_localhost="/usr/bin/nuoyis-toolbox"
+REMOTE_HASH=$(curl -H "Cache-Control: no-cache" -H "Pragma: no-cache" -sL "$updateurl" | sha256sum | awk '{print $1}')
+LOCAL_HASH=$(sha256sum "$shell_localhost" | awk '{print $1}')
+}
+
 update::shell(){
 if [ "$REMOTE_HASH" != "$LOCAL_HASH" ]; then
+	show::githuburl
     echo "shell will update"
 	curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
 	chmod +x /usr/bin/nuoyis-toolbox
@@ -1360,6 +1364,7 @@ while [[ $# -gt 0 ]]; do
 			shift
 			;;
 		-sha|--sha256sum)
+			show::githuburl
 			echo "shell latest version sha256sum: $REMOTE_HASH"
 			echo "shell local version sha256sum: $LOCAL_HASH"
 			exit 0
