@@ -1225,22 +1225,23 @@ mirrors=(
 )
 
 for mirror in "${mirrors[@]}"; do
-	curl -sSk -o /dev/null "${mirror}/https://raw.githubusercontent.com/nuoyis/shell/refs/heads/main/nuoyis-linux-toolbox.sh"
+	test_url="${mirror}/https://raw.githubusercontent.com/nuoyis/shell/refs/heads/main/nuoyis-linux-toolbox.sh"
+	curl -sSk -o /dev/null $test_url
 	if [ $? -eq 0 ];then
     	updateurl=$test_url
 		break
     fi
 done
 shell_localhost="/usr/bin/nuoyis-toolbox"
-REMOTE_HASH=$(curl -H "Cache-Control: no-cache" -H "Pragma: no-cache" -sL "$updateurl" | sha256sum | awk '{print $1}')
+REMOTE_HASH=$(curl -H "Cache-Control: no-cache" -H "Pragma: no-cache" -sSkL "$updateurl" | sha256sum | awk '{print $1}')
 LOCAL_HASH=$(sha256sum "$shell_localhost" | awk '{print $1}')
 }
 
 update::shell(){
+show::githuburl
 if [ "$REMOTE_HASH" != "$LOCAL_HASH" ]; then
-	show::githuburl
     echo "shell will update"
-	curl -sSk -o /usr/bin/nuoyis-toolbox "${mirror}/https://raw.githubusercontent.com/nuoyis/shell/refs/heads/main/nuoyis-linux-toolbox.sh"
+	curl -sSkL -o /usr/bin/nuoyis-toolbox $updateurl
 	chmod +x /usr/bin/nuoyis-toolbox
 	echo "shell is updated"
 else
