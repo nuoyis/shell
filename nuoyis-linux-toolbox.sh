@@ -7,6 +7,9 @@
 # auth           : nuoyis
 # Webside        : blog.nuoyis.net
 
+# 变量设置
+PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
+export PATH
 # 版本号
 version="1.2"
 # 语言设置
@@ -1237,7 +1240,7 @@ update::shell(){
 if [ "$REMOTE_HASH" != "$LOCAL_HASH" ]; then
 	show::githuburl
     echo "shell will update"
-	curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
+	curl -sSk -o /usr/bin/nuoyis-toolbox "${mirror}/https://raw.githubusercontent.com/nuoyis/shell/refs/heads/main/nuoyis-linux-toolbox.sh"
 	chmod +x /usr/bin/nuoyis-toolbox
 	echo "shell is updated"
 else
