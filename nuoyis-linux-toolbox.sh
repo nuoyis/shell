@@ -1,6 +1,5 @@
 #!/bin/bash
 # Script Name    : nuoyis toolbox
-# Version:       : v1.5
 # Description    : Linux quick initialization and installation
 # Create Date    : 2025-04-23
 # Update Date    : 2025-05-20
@@ -11,7 +10,7 @@
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
 # 版本号
-version="1.2"
+version="v1.6"
 # 语言设置
 LANG=en_US.UTF-8
 #变量定义区域
