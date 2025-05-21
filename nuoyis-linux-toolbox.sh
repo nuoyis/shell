@@ -329,7 +329,9 @@ echo "#  Welcome  to  $nuname's  NAS  #"
 echo "################################"
 EOF
 
-cat > /$nuname-server/web/nginx/server/conf/nginx.conf << EOF
+rm -rf /$nuname-server/web/nginx/conf/default.conf
+
+cat > /$nuname-server/web/nginx/conf/nas.conf << EOF
 server {
 	listen 80;
     listen [::]:80;
@@ -642,34 +644,34 @@ http {
     client_body_buffer_size 16K;
     client_max_body_size 10M;
 
-
-    # 默认页面的 server 配置
-    server {
-        listen 80 default_server;
-        listen 443 default_server ssl;
-        server_name _;
-        # SSL 配置
-        ssl_certificate /$nuname-server/web/nginx/server/conf/ssl/default.pem;
-        ssl_certificate_key /$nuname-server/web/nginx/server/conf/ssl/default.key;
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
-        ssl_prefer_server_ciphers on;
-        ssl_session_cache shared:SSL:10m;
-        ssl_session_timeout 10m;
-
-        charset utf-8;
-        root /$nuname-server/web/nginx/webside/default;
-        index index.html;
-
-        # 错误页面配置
-        error_page 404 /404.html;
-        error_page 500 502 503 504 /50x.html;
-
-        # include start-php-81.conf; 
-    }
-
-    # 其他相关配置
+    # 其他页面
     include /$nuname-server/web/nginx/conf/*.conf;
+}
+EOF
+cat > /$nuname-server/web/nginx/conf/default.conf << EOF
+ # 默认页面的 server 配置
+server {
+    listen 80 default_server;
+    listen 443 default_server ssl;
+    server_name _;
+    # SSL 配置
+    ssl_certificate /$nuname-server/web/nginx/server/conf/ssl/default.pem;
+    ssl_certificate_key /$nuname-server/web/nginx/server/conf/ssl/default.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    charset utf-8;
+    root /$nuname-server/web/nginx/webside/default;
+    index index.html;
+
+    # 错误页面配置
+    error_page 404 /404.html;
+    error_page 500 502 503 504 /50x.html;
+
+    # include start-php-81.conf; 
 }
 EOF
 curl -L -o /$nuname-server/web/nginx/webside/default/index.html https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/index.html
