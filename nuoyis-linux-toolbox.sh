@@ -424,7 +424,7 @@ install::docker(){
 }
 EOF
 	manager::systemctl start docker
-	curl -L "https://hub.gitmirror.com/https://github.com/docker/compose/releases/download/v2.32.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
+	curl -L "https://alist.nuoyis.net/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/docker-compose/docker-compose-linux-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
 }
 
 install::dockerapp(){
