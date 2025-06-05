@@ -424,10 +424,10 @@ install::docker(){
 }
 EOF
 	manager::systemctl start docker
-	if [ -n "$swap_file" ];then
+	if [ -f "/usr/bin/docker-compose" ];then
 		echo "docker-compose 二进制文件已存在"
 	else
-		curl -kL "https://alist.nuoyis.net/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/docker-compose/docker-compose-linux-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
+		curl -kL "https://alist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/docker-compose/docker-compose-linux-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
 	fi
 }
 
