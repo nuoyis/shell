@@ -9,16 +9,25 @@
 # 变量设置
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
-# 版本号
-version="v1.6"
 # 语言设置
 LANG=en_US.UTF-8
 #变量定义区域
-#手动变量定义区域
+
+#变量初始化区域
 nuname="nuoyis"
-CIDR="10.104.43"
-gateway="10.104.0.1"
-dns="223.5.5.5"
+options_yum=0
+options_lnmp=0
+options_tuning=0
+options_kernel_update=0
+options_swap=0
+options_docker=0
+options_docker_app=0
+options_nas=0
+options_ollama=0
+options_bt=0
+# CIDR="10.104.43"
+# gateway="10.104.0.1"
+# dns="223.5.5.5"
 
 #自动获取变量区域
 startTime=`date +%Y%m%d-%H:%M:%S`
@@ -30,6 +39,32 @@ nuo_setnetwork_shell=$(ip a | grep -oE "inet ([0-9]{1,3}.){3}[0-9]{1,3}" | awk '
 system_name=`head -n 1 /etc/os-release | grep -oP '(?<=NAME=").*(?=")' | awk '{print$1}'`
 system_version=`cat /etc/os-release | grep -oP '(?<=VERSION_ID=").*(?=")'`
 system_version=${system_version%.*}
+
+# 用户终止脚本判断
+exit::backoff() {
+    case $exit_type in
+        SIGINT)
+            echo "用户执行Ctrl+C"
+            ;;
+        SIGTERM)
+            echo "进程被杀死"
+            ;;
+        SIGHUP)
+            echo "终端连接异常"
+            ;;
+        *)
+            echo "未知信号"
+            ;;
+    esac
+	echo "正在清理残余文件并退出脚本"
+	rm -rf /nuoyis-install
+	rm -rf /root/.toolbox-install-init.lock
+	exit 1
+}
+
+trap 'exit_type=SIGINT; exit::backoff' SIGINT
+trap 'exit_type=SIGTERM; exit::backoff' SIGTERM
+trap 'exit_type=SIGHUP; exit::backoff' SIGHUP
 
 # 检测包管理器
 if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
@@ -90,7 +125,7 @@ manager::systemctl(){
 	fi    
 }
 
-manager::yum(){
+manager::repositories(){
     case $1 in
 		"remove")
 			# 移除指定的软件包
@@ -120,13 +155,13 @@ manager::yum(){
 			;;
 		"installfull")
 			# 在Yum中使用特定选项安装软件包
-			if [ $PM = "yum" ]; then
+			if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
 				yes | $PM $2 install ${@:3} -y
 			fi
 			;;
 		"updatefull")
 			# 在Yum中使用特定选项更新软件包
-			if [ $PM = "yum" ]; then
+			if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
 				yes | $PM $2 update ${@:3} -y
 			fi
 			;;		
@@ -135,7 +170,7 @@ manager::yum(){
 			$PM list installed | egrep $2 &>/dev/null
 			;;
 		"repoadd")
-			if [ $PM = "yum" ]; then
+			if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
 				# repo添加
 				$PM config-manager --add-repo $2
 			fi
@@ -176,7 +211,7 @@ EOF
 	fi
 
 # 原有环境判断并卸载
-    manager::yum remove nginx* php* mariadb* mysql*
+    manager::repositories remove nginx* php* mariadb* mysql*
     systemctl disable nginx php-fpm mysqld
 	for service in nginx httpd mysqld pure-ftpd tomcat redis memcached mongodb pgsql tomcat tomcat7 tomcat8 tomcat9 php-fpm-52 php-fpm-53 php-fpm-54 php-fpm-55 php-fpm-56 php-fpm-70 php-fpm-71 php-fpm-72 php-fpm-73
 		do
@@ -226,7 +261,7 @@ install::nas(){
     chmod -R 775 /$nuname-server/sharefile
     # chmod g+s /$nuname-server/sharefile
     # 额外配置
-    manager::yum install vsftpd samba*
+    manager::repositories install vsftpd samba*
 
     firewall-cmd --per --add-service=smb
     firewall-cmd --per --add-service=ftp
@@ -383,16 +418,16 @@ manager::systemctl start vsftpd smb nmb
 install::docker(){
 	echo "安装Docker"
 	mkdir -p /$nuname-server/docker-yaml/
-	if [ $PM = "yum" ];then
-	manager::yum install yum-utils device-mapper-persistent-data lvm2
-	manager::yum repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+	manager::repositories install yum-utils device-mapper-persistent-data lvm2
+	manager::repositories repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 	fi
 	sed -i 's+download.docker.com+mirrors.aliyun.com/docker-ce+' /etc/yum.repos.d/docker-ce.repo
 	if [ $system_name == "openEuler" ];then
 		sed -i 's+$releasever+8+'  /etc/yum.repos.d/docker-ce.repo
 	fi
-	manager::yum makecache
-	manager::yum install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+	manager::repositories makecache
+	manager::repositories install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 	mkdir -p /etc/docker
 	touch /etc/docker/daemon.json
 	cat > /etc/docker/daemon.json << EOF
@@ -488,7 +523,7 @@ install::ollama(){
 install::lnmp(){
 	echo "安装lnmp"
 	sleep 30
-	if [ $PM = "yum" ];then
+	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
 		aboutserver=`systemctl is-active firewalld`
 		if [ $aboutserver == "inactive" ];then
 			manager::systemctl start firewalld
@@ -501,7 +536,7 @@ install::lnmp(){
 			# 快速安装
 			yes | dnf module reset php
 			yes | dnf module install php:remi-8.4
-			manager::yum install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb-server
+			manager::repositories install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb-server
 			manager::systemctl start nginx php-fpm mariadb
 			# ln -sf 
 		elif [ $options_lnmp_value == "gcc" ];then
@@ -513,7 +548,7 @@ install::lnmp(){
 				useradd -u 2233 -m -s /sbin/nologin nuoyis-web
 			fi;
 			echo "安装必要依赖项"
-			manager::yum install autoconf bison re2c make procps-ng gcc gcc-c++ iputils pkgconfig pcre pcre-devel zlib-devel openssl openssl-devel libxslt-devel libpng-devel libjpeg-devel freetype-devel libxml2-devel sqlite-devel bzip2-devel libcurl-devel libXpm-devel libzip-devel oniguruma-devel gd-devel geoip-devel
+			manager::repositories install autoconf bison re2c make procps-ng gcc gcc-c++ iputils pkgconfig pcre pcre-devel zlib-devel openssl openssl-devel libxslt-devel libpng-devel libjpeg-devel freetype-devel libxml2-devel sqlite-devel bzip2-devel libcurl-devel libXpm-devel libzip-devel oniguruma-devel gd-devel geoip-devel
 			manager::download https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
 			manager::download https://openlist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/php/php-8.4.2.tar.gz
 			tar -xzvf nginx-1.27.0.tar.gz
@@ -777,7 +812,7 @@ EOF
     docker-compose -f /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml up -d
     	fi
 	else
-		manager::yum install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
+		manager::repositories install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
 	fi
 }
 
@@ -785,7 +820,7 @@ conf::yumsource(){
 reponum=`$PM list | wc -l`
 
 # if [ $reponum -lt 1000 ];then
-if [ $PM = "yum" ];then
+if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
 	echo "正在检查是否存在冲突/模块缺失"
 	echo "正在检查模块依赖问题..."
 
@@ -931,37 +966,43 @@ EOF
 			echo "skip_broken=True" >> /etc/dnf/dnf.conf
 
 			echo "正在配置附加源"
-			manager::yum installcheck epel
+			manager::repositories installcheck epel
 			if [ $? -eq 0 ];then
-				manager::yum remove epel-release epel-next-release
+				manager::repositories remove epel-release epel-next-release
 			fi
 
-			manager::yum installcheck remi
+			manager::repositories installcheck remi
 			if [ $? -eq 0 ];then
-				manager::yum remove remi-release-9.4-2.el9.remi.noarch
+				manager::repositories remove remi-release-9.4-2.el9.remi.noarch
 			fi
 
-			manager::yum installcheck elrepo
+			manager::repositories installcheck elrepo
 			if [ $? -eq 0 ];then
-				manager::yum remove elrepo-release.noarch
+				manager::repositories remove elrepo-release.noarch
 			fi
 
-			rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
-			yum install https://mirrors.aliyun.com/epel/epel-release-latest-9.noarch.rpm https://mirrors.aliyun.com/epel/epel-next-release-latest-9.noarch.rpm https://www.elrepo.org/elrepo-release-9.el9.elrepo.noarch.rpm -y
+			manager::repositories install https://mirrors.aliyun.com/epel/epel-release-latest-$system_version.noarch.rpm
+			if [ $system_version -lt 10 ]; then
+				rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
+				https://mirrors.aliyun.com/epel/epel-next-release-latest-$system_version.noarch.rpm
+			else
+				rpm --import https://www.elrepo.org/RPM-GPG-KEY-v2-elrepo.org
+			fi
 			rm -rf /etc/yum.repos.d/epel-cisco-openh264.repo
 			sed -e 's!^metalink=!#metalink=!g' \
-			-e 's!^#baseurl=!baseurl=!g' \
-			-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
-			-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
-			-i /etc/yum.repos.d/epel{,*}.repo
+			    -e 's!^#baseurl=!baseurl=!g' \
+			    -e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
+			    -e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
+			    -i /etc/yum.repos.d/epel{,*}.repo
+			manager::repositories install https://mirrors.aliyun.com/remi/enterprise/remi-release-$system_version.rpm
+			sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+			    -e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+			    -e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+			    -i  /etc/yum.repos.d/remi*.repo
+			manager::repositories install https://www.elrepo.org/elrepo-release-$system_version.el$system_version.elrepo.noarch.rpm
 			sed -e 's/http:\/\/elrepo.org\/linux/https:\/\/mirrors.aliyun.com\/elrepo/g' \
 			    -e 's/mirrorlist=/#mirrorlist=/g' \
 				-i /etc/yum.repos.d/elrepo.repo
-			manager::yum install https://shell.nuoyis.net/download/remi-release-9.rpm
-			sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-			-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-			-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-			-i  /etc/yum.repos.d/remi*.repo
 		else
 			sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
 		fi
@@ -977,9 +1018,9 @@ EOF
 	# 红帽系统特调
 	if [ $system_name == "Red" ];then
 		echo "正在对RHEL系统进行openssl系统特调"
-		manager::yum remove subscription-manager-gnome     
-		manager::yum remove subscription-manager-firstboot     
-		manager::yum remove subscription-manager
+		manager::repositories remove subscription-manager-gnome     
+		manager::repositories remove subscription-manager-firstboot     
+		manager::repositories remove subscription-manager
 		rpm -e --nodeps openssl-fips-provider
 		rpm -e --nodeps redhat-logos
 		rpm -e --nodeps redhat-release
@@ -1000,7 +1041,7 @@ EOF
 		rm -rf /etc/yum.repos.d/rocky*.repo
 		# 可视化处理
 		# sudo dnf groupinstall "Server with GUI"
-		# manager::yum install https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+		# manager::repositories install https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
 		if [ -d /sys/firmware/efi ] && [ -d /boot/efi/EFI/redhat ];then
 			echo "你的Boot分区为EFI，正在进行特别优化"
 			mv /boot/efi/EFI/redhat/ /boot/efi/EFI/rocky
@@ -1017,20 +1058,20 @@ EOF
 
 	echo "正在更新源"
 	rm -rf /etc/yum.repods.d/*.rpmsave
-	manager::yum clean
-	manager::yum update
-	manager::yum makecache
+	manager::repositories clean
+	manager::repositories update
+	manager::repositories makecache
 }
 
 install::kernel(){
 echo "内核更最新"
-if [ $PM = "yum" ];then
-manager::yum installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml.x86_64
-manager::yum remove kernel-tools-libs.x86_64 kernel-tools.x86_64
-manager::yum installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml-tools.x86_64
+if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+manager::repositories installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml.x86_64
+manager::repositories remove kernel-tools-libs.x86_64 kernel-tools.x86_64
+manager::repositories installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml-tools.x86_64
 else
 	# https://zichen.zone/archives/debian_linux_kernel_update.html
-	manager::yum install linux-image-amd64 linux-headers-amd64
+	manager::repositories install linux-image-amd64 linux-headers-amd64
 fi
 cat > /nuoyis-server/shell/kernel-update.sh << EOF
 #!/bin/bash
@@ -1075,13 +1116,13 @@ if [ $PM == "yum" ] && [ $system_name != "openEuler" ];then
 					options_source_installer
 					# https://www.rockylinux.cn/notes/strong-rocky-linux-8-sheng-ji-zhi-rocky-linux-9-strong.html
 					# 安装 epel 源
-					manager::yum epel-release
+					manager::repositories epel-release
 					
 					# 更新系统至最新版
-					manager::yum update
+					manager::repositories update
 
 					# 安装 rpmconf 和 yum-utils
-					manager::yum rpmconf yum-utils
+					manager::repositories rpmconf yum-utils
 					
 					# 执行 rpmconf，如果出现提示信息，请输入 Y 和回车继续，如果没提示继续。
 					yes | rpmconf -a
@@ -1104,15 +1145,15 @@ if [ $PM == "yum" ] && [ $system_name != "openEuler" ];then
 					yes | rpm --rebuilddb
 					
 					# 安装新内核
-					manager::yum install kernel
-					manager::yum install kernel-core
-					manager::yum install shim
+					manager::repositories install kernel
+					manager::repositories install kernel-core
+					manager::repositories install shim
 					
 					# 安装基础环境
-					manager::yum installfull group minimal-environment
+					manager::repositories installfull group minimal-environment
 					
 					# 安装 rpmconf 和 yum-utils
-					manager::yum install rpmconf yum-utils
+					manager::repositories install rpmconf yum-utils
 					
 					# 执行 rpmconf，根据提示一直输入 Y 和回车即可
 					rpmconf -a
@@ -1122,7 +1163,7 @@ if [ $PM == "yum" ] && [ $system_name != "openEuler" ];then
 					grub2-mkconfig -o $grubcfg/grub.cfg
 					
 					# 更新系统
-					manager::yum update
+					manager::repositories update
 					
 					# 重启系统
 					reboot
@@ -1177,7 +1218,7 @@ mkdir -p /$nuname-server/{openssl,logs,shell}
 # touch /$nuname-server/
 
 echo "安装核心软件包"
-manager::yum install dnf-plugins-core python3 pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils
+manager::repositories install dnf-plugins-core python3 pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils
 }
 
 conf::tuning(){
@@ -1259,7 +1300,6 @@ IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
   -sw, --swap          config Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
   -mp, --mysqlpassword config nuoyis-lnmp-np password set  
   -h,  --help          show shell help
-  -v,  --version       show version
   -sha, --sha256sum    show shell's sha256sum
 EOF
 
@@ -1350,11 +1390,6 @@ while [[ $# -gt 0 ]]; do
             options_bt=1
             shift
             ;;
-		-v|--version)
-			echo $version
-			exit 0
-			shift
-			;;
 		-up|--update)
 			update::shell
 			exit 0
@@ -1389,49 +1424,52 @@ if [ $whois != "root" ];then
 fi
 
 # 下面开始依据变量值执行函数
-if [[ "${options_yum:-0}" -eq 1 ]]; then
+if [[ $options_yum -eq 1 ]]; then
   conf::yumsource
 fi
 
-
-if [[  ]]
-install::main
-
-if [[ "${options_bt:-0}" -eq 1 ]]; then
-  install::bt
+if [[ ! -f /root/.toolbox-install-init.lock ]]; then
+	touch /root/.toolbox-install-init.lock
+	install::main
 fi
 
-if [[ "${options_kernel_update:-0}" -eq 1 ]]; then
-  install::kernel
+if [[ $options_bt -eq 1 ]]; then
+	install::bt
 fi
 
-if [[ "${options_tuning:-0}" -eq 1 ]]; then
-  conf::tuning
+if [[ $options_kernel_update -eq 1 ]]; then
+	install::kernel
 fi
 
-if [[ "${options_lnmp:-0}" -eq 1 ]]; then
-  if [ $options_lnmp_value == "docker" ];then
+if [[ $options_tuning -eq 1 ]]; then
+	conf::tuning
+fi
+
+if [[ $options_lnmp -eq 1 ]]; then
+	if [ $options_lnmp_value == "docker" ];then
+		install::docker
+	fi
+	install::lnmp
+fi
+
+if [[ $options_docker -eq 1 ]]; then
 	install::docker
-  fi
-  install::lnmp
 fi
 
-if [[ "${options_docker:-0}" -eq 1 ]]; then
-  install::docker
+if [[ $options_docker_app -eq 1 ]]; then
+	install::dockerapp
 fi
 
-if [[ "${options_docker_app:-0}" -eq 1 ]]; then
-  install::dockerapp
+if [[ $options_nas -eq 1 ]]; then
+	if [ -z $options_lnmp ];then
+  		options_lnmp_value=gcc
+	install::lnmp
+	fi
+	install::nas
 fi
 
-if [[ "${options_nas:-0}" -eq 1 ]]; then
-  if [ -z $options_lnmp ];then
-  	options_lnmp_value=gcc
-  	install::lnmp
-  fi
-  install::nas
+if [[ $options_ollama -eq 1 ]]; then
+	install::ollama
 fi
 
-if [[ "${options_ollama:-0}" -eq 1 ]]; then
-  install::ollama
-fi
+rm -rf /nuoyis-install
