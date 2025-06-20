@@ -2,7 +2,7 @@
 # Script Name    : nuoyis toolbox
 # Description    : Linux quick initialization and installation
 # Create Date    : 2025-04-23
-# Update Date    : 2025-05-20
+# Update Date    : 2025-06-19
 # auth           : nuoyis
 # Webside        : blog.nuoyis.net
 
@@ -33,7 +33,11 @@ system_version=${system_version%.*}
 
 # 检测包管理器
 if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
-    PM="yum"
+	if [ $system_version -lt 8 ]; then
+    	PM="yum"
+	else
+		PM="dnf"
+	fi
 	case $system_name in
 		"CentOS")
 		osname="centos-stream"
@@ -394,25 +398,9 @@ install::docker(){
 	cat > /etc/docker/daemon.json << EOF
 {
   "registry-mirrors": [
-    "https://hub.nastool.de",
-    "https://docker.1ms.run",
-    "https://docker.1panel.live",
-    "https://docker.1panel.top",
-    "https://hub-mirror.c.163.com",
-    "https://mirror.baidubce.com",
-    "https://dockerhub.icu",
-    "https://hub.rat.dev",
-    "https://docker.wanpeng.top",
-    "https://docker.mrxn.net",
-    "https://docker.anyhub.us.kg",
-    "https://dislabaiot.xyz",
-    "https://docker.fxxk.dedyn.io",
-    "https://docker-mirror.aigc2d.com",
-    "https://doublezonline.cloud",
-    "https://dockerproxy.com",
-    "https://mirror.iscas.ac.cn",
-    "https://docker66ccff.lovablewyh.eu.org",
-    "https://docker.m.daocloud.io"
+    "https://docker.xuanyuan.me",
+	"https://docker.m.daocloud.io",
+    "https://docker66ccff.lovablewyh.eu.org"
   ],
   "bip": "192.168.100.1/24",
   "default-address-pools": [
@@ -427,7 +415,7 @@ EOF
 	if [ -f "/usr/bin/docker-compose" ];then
 		echo "docker-compose 二进制文件已存在"
 	else
-		curl -kL "https://alist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/docker-compose/docker-compose-linux-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
+		curl -kL "https://openlist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/docker-compose/docker-compose-linux-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
 	fi
 }
 
@@ -527,7 +515,7 @@ install::lnmp(){
 			echo "安装必要依赖项"
 			manager::yum install autoconf bison re2c make procps-ng gcc gcc-c++ iputils pkgconfig pcre pcre-devel zlib-devel openssl openssl-devel libxslt-devel libpng-devel libjpeg-devel freetype-devel libxml2-devel sqlite-devel bzip2-devel libcurl-devel libXpm-devel libzip-devel oniguruma-devel gd-devel geoip-devel
 			manager::download https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
-			manager::download https://alist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/php/php-8.4.2.tar.gz
+			manager::download https://openlist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/php/php-8.4.2.tar.gz
 			tar -xzvf nginx-1.27.0.tar.gz
 			tar -xzvf php-8.4.2.tar.gz
 			cd nginx-1.27.0
@@ -678,14 +666,14 @@ server {
     # include start-php-81.conf; 
 }
 EOF
-curl -L -o /$nuname-server/web/nginx/webside/default/index.html https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/index.html
-curl -L -o /$nuname-server/web/nginx/server/conf/ssl/default.pem https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.pem
-curl -L -o /$nuname-server/web/nginx/server/conf/ssl/default.key https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.key
-curl -L -o /$nuname-server/web/nginx/server/conf/start-php-84.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/start-php-84.conf.txt
-curl -L -o /$nuname-server/web/nginx/server/conf/path.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/path.conf.txt
-curl -L -o /$nuname-server/web/nginx/server/conf/start-php-81.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/start-php-81.conf.txt
-curl -L -o /$nuname-server/web/php/etc/php.ini https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/84php.ini.txt
-curl -L -o /$nuname-server/web/php/etc/php-fpm.d/fpm.conf https://alist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/fpm-84.conf.txt
+curl -L -o /$nuname-server/web/nginx/webside/default/index.html https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/index.html
+curl -L -o /$nuname-server/web/nginx/server/conf/ssl/default.pem https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.pem
+curl -L -o /$nuname-server/web/nginx/server/conf/ssl/default.key https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.key
+curl -L -o /$nuname-server/web/nginx/server/conf/start-php-84.conf https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/start-php-84.conf.txt
+curl -L -o /$nuname-server/web/nginx/server/conf/path.conf https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/path.conf.txt
+curl -L -o /$nuname-server/web/nginx/server/conf/start-php-81.conf https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/start-php-81.conf.txt
+curl -L -o /$nuname-server/web/php/etc/php.ini https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/84php.ini.txt
+curl -L -o /$nuname-server/web/php/etc/php-fpm.d/fpm.conf https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/fpm-84.conf.txt
 
 ln -s /$nuname-server/web/nginx/server/sbin/nginx /usr/local/bin/
 cat > /etc/systemd/system/nginx.service <<EOF
@@ -1405,6 +1393,8 @@ if [[ "${options_yum:-0}" -eq 1 ]]; then
   conf::yumsource
 fi
 
+
+if [[  ]]
 install::main
 
 if [[ "${options_bt:-0}" -eq 1 ]]; then
