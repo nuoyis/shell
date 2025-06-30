@@ -89,11 +89,11 @@ elif command -v apt-get > /dev/null 2>&1 && command -v dpkg > /dev/null 2>&1; th
 fi
 
 manager::download(){
-	if [ -f /usr/bin/curl ];then
-		curl -sSOLk $1;
-	else 
+	if [ -f /usr/bin/wget ];then
 		wget $1;
-	fi;
+	else
+		curl -sSOLk $1;
+	fi
 }
 
 manager::systemctl(){
@@ -368,8 +368,6 @@ echo "#  Welcome  to  $nuname's  NAS  #"
 echo "################################"
 EOF
 
-rm -rf /$nuname-server/web/nginx/conf/default.conf
-
 cat > /$nuname-server/web/nginx/conf/nas.conf << EOF
 server {
 	listen 80;
@@ -411,7 +409,13 @@ server {
 	}
 }
 EOF
-systemctl reload nginx
+
+if [ $options_lnmp_value == "gcc" ] || [  $options_lnmp_value == "yum" ];then
+	rm -rf /$nuname-server/web/nginx/conf/default.conf
+	systemctl reload nginx
+elif [ $options_lnmp_value == "docker" ];then
+	docker restart nuoyis-lnmp-np
+fi
 manager::systemctl start vsftpd smb nmb
 }
 
@@ -456,13 +460,12 @@ EOF
 
 install::dockerapp(){
 	cat > /nuoyis-server/docker-yaml/app.yaml <<EOF
-version: '3'
 services:
-  nuoyis-app-alist:
-    container_name: alist
-    image: docker.m.daocloud.io/xhofe/alist:latest
+  nuoyis-apps-openlist:
+    container_name: nuoyis-apps-openlist
+    image: openlistteam/openlist:latest-aio
     volumes:
-      - /nuoyis-server/alist/data:/opt/alist/data
+      - /nuoyis-server/openlist/data:/opt/openlist/data
     ports:
       - 5244:5244
     environment:
@@ -470,9 +473,9 @@ services:
       - PGID=0
       - UMASK=022
     restart: always
-  nuoyis-app-qinglong:
-    container_name: qinglong
-    image: docker.m.daocloud.io/whyour/qinglong:debian
+  nuoyis-apps-qinglong:
+    container_name: nuoyis-apps-qinglong
+    image: whyour/qinglong:latest
     volumes:
       - /nuoyis-server/qinglong/data:/ql/data
     ports:
@@ -481,8 +484,8 @@ services:
       QlBaseUrl: '/'
     restart: always
   nuoyis-app-certd:
-    image: registry.cn-shenzhen.aliyuncs.com/handsfree/certd:latest
-    container_name: certd
+    image: registry.cn-shenzhen.aliyuncs.com/handsfree/certd
+    container_name: nuoyis-apps-certd
     ports:
       - 7001:7001
       - 7002:7002
@@ -493,9 +496,9 @@ services:
     environment:
       - certd_system_resetAdminPasswd=false
     restart: always
-  nuoyis-lnmp-autorestart:
+  nuoyis-apps-autorestart:
     container_name: nuoyis-apps-autorestart
-    image: docker.m.daocloud.io/willfarrell/autoheal
+    image: willfarrell/autoheal
     environment:
       - AUTOHEAL_CONTAINER_LABEL=all
     volumes:
@@ -503,14 +506,34 @@ services:
     restart: always
   nuoyis-apps-autoupdate:
     command: '--cleanup -i 3600'
-    image: docker.m.daocloud.io/containrrr/watchtower
+    image: docker.xuanyuan.dev/containrrr/watchtower
+    container_name: nuoyis-apps-autoupdate
     volumes:
       - '/etc/docker/daemon.json:/etc/docker/daemon.json'
       - '/var/run/docker.sock:/var/run/docker.sock'
+      - '/root/.docker/config.json:/config.json'
     environment:
       - TZ=Asia/Shanghai
-    container_name: nuoyis-apps-autoupdate
     restart: always
+#   nuoyis-apps-mihoyo-bbs:
+#     image: womsxd/mihoyo-bbs
+#     container_name: nuoyis-apps-mihoyo-bbs 
+#     restart: always
+#     environment:
+#       - CRON_SIGNIN=30 9 * * *
+#       - MULTI=TRUE
+#     volumes:
+#       - /nuoyis-server/MihoyoBBSTools:/var/app
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "1m"
+#   nuoyis-apps-jd-autologin:
+#     image: icepage/aujc
+#     container_name: nuoyis-apps-jd-autologin
+#     restart: always
+#     volumes:
+#       - /nuoyis-server/jd/config.py:/app/config.py
 EOF
 docker-compose -f /$nuname-server/docker-yaml/app.yaml up -d
 }
@@ -532,23 +555,101 @@ install::lnmp(){
 		firewall-cmd --zone=public --add-service=http --per
 		firewall-cmd --zone=public --add-port=3306/tcp --per
 		firewall-cmd --reload
+		id -u nuoyis-web >/dev/null 2>&1
+		if [ $? -eq 1 ];then
+			mkdir -p /$nuname-server/{logs/nginx,web/{nginx/{webside/default,server/conf/ssl,conf},php/{server,conf},mysql}}
+			touch /$nuname-server/logs/nginx/{error.log,nginx.pid}
+			useradd -u 2233 -m -s /sbin/nologin nuoyis-web
+			groupadd nuoyis-web-share
+			usermod -aG nuoyis-web-share nginx
+			usermod -aG nuoyis-web-share nuoyis-web
+			chown -R root:nuoyis-web-share /$nuname-server/web/nginx/
+			chmod -R 2775 /$nuname-server/web/nginx/
+		fi
 		if [ $options_lnmp_value == "yum" ];then
 			# 快速安装
 			yes | dnf module reset php
-			yes | dnf module install php:remi-8.4
+			yes | dnf module install php:remi-8.4 -y
 			manager::repositories install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb-server
+			cat > /etc/nginx/nginx.conf <<EOF
+user nuoyis-web;
+worker_processes auto;
+worker_rlimit_nofile 65535;
+
+events {
+    worker_connections 2048;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+
+    #log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+    #                  '\$status \$body_bytes_sent "\$http_referer" '
+    #                  '"\$http_user_agent" "\$http_x_forwarded_for"';
+
+    #access_log  logs/access.log  main;
+
+    sendfile        on;
+    #tcp_nopush     on;
+
+    #keepalive_timeout  0;
+    keepalive_timeout  65;
+
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 256;
+    gzip_types text/plain application/xml text/css application/javascript application/json image/svg+xml;
+    gzip_proxied any;
+
+    open_file_cache max=1000 inactive=20s;
+    open_file_cache_valid 30s;
+    open_file_cache_errors off;
+
+    client_body_buffer_size 16K;
+    client_max_body_size 10M;
+
+    # 其他页面
+    include /$nuname-server/web/nginx/conf/*.conf;
+}
+EOF
+cat > /$nuname-server/web/nginx/conf/default.conf << EOF
+ # 默认页面的 server 配置
+server {
+    listen 80 default_server;
+    listen 443 default_server ssl;
+    server_name _;
+    # SSL 配置
+    ssl_certificate /$nuname-server/web/nginx/server/conf/ssl/default.pem;
+    ssl_certificate_key /$nuname-server/web/nginx/server/conf/ssl/default.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    charset utf-8;
+    root /$nuname-server/web/nginx/webside/default;
+    index index.html;
+
+    # 错误页面配置
+    error_page 404 /404.html;
+    error_page 500 502 503 504 /50x.html;
+
+    # include start-php-81.conf; 
+}
+EOF
+			cat > /$nuname-server/web/nginx/webside/default/index.html << EOF
+welcome to nuoyis's server
+EOF
+			curl -L -o /$nuname-server/web/nginx/server/conf/ssl/default.pem https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.pem
+			curl -L -o /$nuname-server/web/nginx/server/conf/ssl/default.key https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.key
 			manager::systemctl start nginx php-fpm mariadb
-			# ln -sf 
 		elif [ $options_lnmp_value == "gcc" ];then
 			# 编译安装
-			mkdir -p /$nuname-server/{logs/nginx,web/{nginx/{webside/default,server/conf/ssl,conf},php/{server,conf},mysql}}
-			touch /$nuname-server/logs/nginx/nginx.pid
-			id -u nuoyis-web >/dev/null 2>&1
-			if [ $? -eq 1 ];then
-				useradd -u 2233 -m -s /sbin/nologin nuoyis-web
-			fi;
 			echo "安装必要依赖项"
 			manager::repositories install autoconf bison re2c make procps-ng gcc gcc-c++ iputils pkgconfig pcre pcre-devel zlib-devel openssl openssl-devel libxslt-devel libpng-devel libjpeg-devel freetype-devel libxml2-devel sqlite-devel bzip2-devel libcurl-devel libXpm-devel libzip-devel oniguruma-devel gd-devel geoip-devel
+			cd /nuoyis-install
 			manager::download https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
 			manager::download https://openlist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/php/php-8.4.2.tar.gz
 			tar -xzvf nginx-1.27.0.tar.gz
@@ -631,8 +732,6 @@ install::lnmp(){
                 --enable-mysqlnd \
                 --enable-session
 		    make -j$(nproc) && make install
-			cd ..
-			touch /$nuname-server/logs/nginx/{error.log,nginx.pid}
 cat > /$nuname-server/web/nginx/server/conf/nginx.conf <<EOF
 worker_processes auto;
 worker_rlimit_nofile 65535;
@@ -751,6 +850,56 @@ services:
       - /$nuname-server/web/nginx/webside:/nuoyis-web/nginx/webside
       - /$nuname-server/web/nginx/ssl:/nuoyis-web/nginx/ssl
       - /var/log:/nuoyis-web/logs
+EOF
+			if [ $options_nas -eq 1 ]; then
+				cat > /$nuname-server/web/nginx/server/conf/nginx.conf <<EOF
+worker_processes auto;
+worker_rlimit_nofile 65535;
+error_log /nuoyis-web/logs/nginx/error.log warn;
+pid /nuoyis-web/logs/nginx/nginx.pid;
+
+events {
+    worker_connections 2048;
+}
+
+http {
+    include mime.types;
+    default_type application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                     '$status $body_bytes_sent "$http_referer" '
+                     '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log /nuoyis-web/logs/access.log main;
+
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 30;
+
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 256;
+    gzip_types text/plain application/xml text/css application/javascript application/json image/svg+xml;
+    gzip_proxied any;
+
+    open_file_cache max=1000 inactive=20s;
+    open_file_cache_valid 30s;
+    open_file_cache_errors off;
+
+    client_body_buffer_size 16K;
+    client_max_body_size 10M;
+
+    # 其他页面
+    include /nuoyis-web/nginx/conf/*.conf;
+}
+EOF
+				cat >> /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml << EOF
+      - /$nuname-server/sharefile:/$nuname-server/sharefile
+      - /$nuname-server/web/nginx/server/conf/nginx.conf:/nuoyis-web/nginx/server/conf/nginx.conf
+EOF
+			fi
+			cat >> /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml << EOF
     shm_size: '1g'
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost"]
@@ -1210,7 +1359,6 @@ fi
 
 echo "创建临时安装文件夹nuoyis-install"
 mkdir -p /nuoyis-install
-cd /nuoyis-install
 
 echo "创建$nuname 服务核心文件夹"
 mkdir -p /$nuname-server/{openssl,logs,shell}
@@ -1218,7 +1366,7 @@ mkdir -p /$nuname-server/{openssl,logs,shell}
 # touch /$nuname-server/
 
 echo "安装核心软件包"
-manager::repositories install dnf-plugins-core python3 pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils
+manager::repositories install dnf-plugins-core python3 pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils tar
 }
 
 conf::tuning(){
@@ -1461,9 +1609,9 @@ if [[ $options_docker_app -eq 1 ]]; then
 fi
 
 if [[ $options_nas -eq 1 ]]; then
-	if [ -z $options_lnmp ];then
+	if [ $options_lnmp -ne 1 ];then
   		options_lnmp_value=gcc
-	install::lnmp
+		install::lnmp
 	fi
 	install::nas
 fi
