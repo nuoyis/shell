@@ -276,13 +276,17 @@ install::nas(){
     chmod -R 775 /$nuname-server/sharefile
     # chmod g+s /$nuname-server/sharefile
     # 额外配置
-    manager::repositories install vsftpd samba*
+    manager::repositories install vsftpd samba
 
-    firewall-cmd --per --add-service=smb
-    firewall-cmd --per --add-service=ftp
-    firewall-cmd --reload
-
-    cat > /etc/vsftpd/vsftpd.conf << EOF
+	if [ $system_name == "Debian" ];then
+		vsftpdfile="/etc/vsftpd.conf"
+	else
+		vsftpdfile="/etc/vsftpd/vsftpd.conf"
+    	firewall-cmd --per --add-service=smb
+    	firewall-cmd --per --add-service=ftp
+    	firewall-cmd --reload
+	fi
+    cat > $vsftpdfile << EOF
 # 不以独立模式运行
 listen=NO
 # 支持 IPV6，如不开启 IPV4 也无法登录
@@ -438,14 +442,20 @@ install::docker(){
 	echo "安装Docker"
 	mkdir -p /$nuname-server/docker-yaml/
 	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
-	manager::repositories install yum-utils device-mapper-persistent-data lvm2
-	manager::repositories repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+		manager::repositories install yum-utils device-mapper-persistent-data lvm2
+		manager::repositories repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+		sed -i 's+download.docker.com+mirrors.aliyun.com/docker-ce+' /etc/yum.repos.d/docker-ce.repo
+		if [ $system_name == "openEuler" ];then
+			sed -i 's+$releasever+8+'  /etc/yum.repos.d/docker-ce.repo
+		fi
+		manager::repositories makecache
+	else
+		install -m 0755 -d /etc/apt/keyrings
+		curl -fsSL https://cernet.mirrors.ustc.edu.cn/docker-ce/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+		chmod a+r /etc/apt/keyrings/docker.gpg
+		echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.cernet.edu.cn/docker-ce/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+		manager::repositories update
 	fi
-	sed -i 's+download.docker.com+mirrors.aliyun.com/docker-ce+' /etc/yum.repos.d/docker-ce.repo
-	if [ $system_name == "openEuler" ];then
-		sed -i 's+$releasever+8+'  /etc/yum.repos.d/docker-ce.repo
-	fi
-	manager::repositories makecache
 	manager::repositories install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 	mkdir -p /etc/docker
 	touch /etc/docker/daemon.json
@@ -558,35 +568,16 @@ install::ollama(){
 	source install_panel.sh
 }
 
-install::lnmp(){
-	echo "安装lnmp"
-	sleep 30
+install::lnmp::quick(){
+	# 快速安装
 	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
-		aboutserver=`systemctl is-active firewalld`
-		if [ $aboutserver == "inactive" ];then
-			manager::systemctl start firewalld
-		fi
-		firewall-cmd --set-default-zone=public
-		firewall-cmd --zone=public --add-service=http --per
-		firewall-cmd --zone=public --add-port=3306/tcp --per
-		firewall-cmd --reload
-		id -u nuoyis-web >/dev/null 2>&1
-		if [ $? -eq 1 ];then
-			mkdir -p /$nuname-server/{logs/nginx,web/{nginx/{webside/default,server/conf/ssl,conf},php/{server,conf},mysql}}
-			touch /$nuname-server/logs/nginx/{error.log,nginx.pid}
-			useradd -u 2233 -m -s /sbin/nologin nuoyis-web
-			groupadd nuoyis-web-share
-			usermod -aG nuoyis-web-share nginx
-			usermod -aG nuoyis-web-share nuoyis-web
-			chown -R root:nuoyis-web-share /$nuname-server/web/nginx/
-			chmod -R 2775 /$nuname-server/web/nginx/
-		fi
-		if [ $options_lnmp_value == "yum" ];then
-			# 快速安装
-			yes | dnf module reset php
-			yes | dnf module install php:remi-8.4 -y
-			manager::repositories install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb-server
-			cat > /etc/nginx/nginx.conf <<EOF
+		yes | dnf module reset php
+		yes | dnf module install php:remi-8.4 -y
+		manager::repositories install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb-server
+	else
+		manager::repositories install nginx php8.4 php8.4-cli php8.4-fpm php8.4-mysql php8.4-xml php8.4-mbstring php8.4-curl mariadb-server
+	fi
+	cat > /etc/nginx/nginx.conf <<EOF
 user nuoyis-web;
 worker_processes auto;
 worker_rlimit_nofile 65535;
@@ -660,93 +651,99 @@ EOF
 			curl -L -o /$nuname-server/web/nginx/server/conf/ssl/default.pem https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.pem
 			curl -L -o /$nuname-server/web/nginx/server/conf/ssl/default.key https://openlist.nuoyis.net/d/blog/nuoyis-lnmp-np/%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/v1.30/ssl/default.key
 			manager::systemctl start nginx php-fpm mariadb
-		elif [ $options_lnmp_value == "gcc" ];then
-			# 编译安装
-			echo "安装必要依赖项"
-			manager::repositories install autoconf bison re2c make procps-ng gcc gcc-c++ iputils pkgconfig pcre pcre-devel zlib-devel openssl openssl-devel libxslt-devel libpng-devel libjpeg-devel freetype-devel libxml2-devel sqlite-devel bzip2-devel libcurl-devel libXpm-devel libzip-devel oniguruma-devel gd-devel geoip-devel
-			cd /nuoyis-install
-			manager::download https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
-			manager::download https://openlist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/php/php-8.4.2.tar.gz
-			tar -xzvf nginx-1.27.0.tar.gz
-			tar -xzvf php-8.4.2.tar.gz
-			cd nginx-1.27.0
-			sed -i 's/#define NGINX_VERSION\s\+".*"/#define NGINX_VERSION      "1.27.0"/g' ./src/core/nginx.h
-            sed -i 's/"nginx\/" NGINX_VERSION/"nuoyis server"/g' ./src/core/nginx.h
-            sed -i 's/Server: nginx/Server: nuoyis server/g' ./src/http/ngx_http_header_filter_module.c
-            sed -i 's/"Server: " NGINX_VER CRLF/"Server: nuoyis server" CRLF/g' ./src/http/ngx_http_header_filter_module.c
-            sed -i 's/"Server: " NGINX_VER_BUILD CRLF/"Server: nuoyis server" CRLF/g' ./src/http/ngx_http_header_filter_module.c
-            ./configure --prefix=/$nuname-server/web/nginx/server \
-                --user=nuoyis-web --group=nuoyis-web \
-                --with-compat \
-                --with-file-aio \
-                --with-threads \
-                --with-http_addition_module \
-                --with-http_auth_request_module \
-                --with-http_dav_module \
-                --with-http_flv_module \
-                --with-http_gunzip_module \
-                --with-http_gzip_static_module \
-                --with-http_mp4_module \
-                --with-http_random_index_module \
-                --with-http_realip_module \
-                --with-http_secure_link_module \
-                --with-http_slice_module \
-                --with-http_ssl_module \
-                --with-http_stub_status_module \
-                --with-http_sub_module \
-                --with-http_v2_module \
-                --with-mail \
-                --with-mail_ssl_module \
-                --with-stream \
-                --with-stream_realip_module \
-                --with-stream_ssl_module \
-                --with-stream_ssl_preread_module
-			make -j$(nproc) && make install
-			chmod +x /$nuname-server/nginx/server/sbin/nginx
-			cd ../php-8.4.2
-			./configure --prefix=/$nuname-server/web/php \
-                --disable-shared \
-                --with-config-file-path=/$nuname-server/web/php/etc/ \
-                --with-curl \
-                --with-freetype \
-                --enable-gd \
-                --with-jpeg \
-                --with-gettext \
-                --with-libdir=lib64 \
-                --with-libxml \
-                --with-mysqli \
-                --with-openssl \
-                --with-pdo-mysql \
-                --with-pdo-sqlite \
-                --with-pear \
-                --enable-sockets \
-                --with-mhash \
-                --with-ldap-sasl \
-                --with-xsl \
-                --with-zlib \
-                --with-zip \
-                --with-bz2 \
-                --with-iconv \
-                --enable-fpm \
-                --enable-pdo \
-                --enable-bcmath \
-                --enable-mbregex \
-                --enable-mbstring \
-                --enable-opcache \
-                --enable-pcntl \
-                --enable-shmop \
-                --enable-soap \
-                --enable-ftp \
-                --with-xpm \
-                --enable-xml \
-                --enable-sysvsem \
-                --enable-cli \
-                --enable-intl \
-                --enable-calendar \
-                --enable-ctype \
-                --enable-mysqlnd \
-                --enable-session
-		    make -j$(nproc) && make install
+}
+
+install::lnmp::gcc(){
+	# 编译安装
+	echo "安装必要依赖项"
+	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+		manager::repositories install autoconf bison re2c make procps-ng gcc gcc-c++ iputils pkgconfig pcre pcre-devel zlib-devel openssl openssl-devel libxslt-devel libpng-devel libjpeg-devel freetype-devel libxml2-devel sqlite-devel bzip2-devel libcurl-devel libXpm-devel libzip-devel oniguruma-devel gd-devel geoip-devel
+	else
+		manager::repositories install autoconf bison re2c make procps gcc g++ iputils-ping pkg-config libpcre3 libpcre3-dev zlib1g-dev openssl libssl-dev libxslt1-dev libpng-dev libjpeg-dev libfreetype6-dev libxml2-dev libsqlite3-dev libbz2-dev libcurl4-openssl-dev libxpm-dev libzip-dev libonig-dev libgd-dev libgeoip-dev
+	fi
+	cd /nuoyis-install
+	manager::download https://mirrors.huaweicloud.com/nginx/nginx-1.27.0.tar.gz
+	manager::download https://openlist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/php/php-8.4.2.tar.gz
+	tar -xzvf nginx-1.27.0.tar.gz
+	tar -xzvf php-8.4.2.tar.gz
+	cd nginx-1.27.0
+	sed -i 's/#define NGINX_VERSION\s\+".*"/#define NGINX_VERSION      "1.27.0"/g' ./src/core/nginx.h
+    sed -i 's/"nginx\/" NGINX_VERSION/"nuoyis server"/g' ./src/core/nginx.h
+    sed -i 's/Server: nginx/Server: nuoyis server/g' ./src/http/ngx_http_header_filter_module.c
+    sed -i 's/"Server: " NGINX_VER CRLF/"Server: nuoyis server" CRLF/g' ./src/http/ngx_http_header_filter_module.c
+    sed -i 's/"Server: " NGINX_VER_BUILD CRLF/"Server: nuoyis server" CRLF/g' ./src/http/ngx_http_header_filter_module.c
+    ./configure --prefix=/$nuname-server/web/nginx/server \
+        --user=nuoyis-web --group=nuoyis-web \
+        --with-compat \
+        --with-file-aio \
+        --with-threads \
+        --with-http_addition_module \
+        --with-http_auth_request_module \
+        --with-http_dav_module \
+        --with-http_flv_module \
+        --with-http_gunzip_module \
+        --with-http_gzip_static_module \
+        --with-http_mp4_module \
+        --with-http_random_index_module \
+        --with-http_realip_module \
+        --with-http_secure_link_module \
+        --with-http_slice_module \
+        --with-http_ssl_module \
+        --with-http_stub_status_module \
+        --with-http_sub_module \
+        --with-http_v2_module \
+        --with-mail \
+        --with-mail_ssl_module \
+        --with-stream \
+        --with-stream_realip_module \
+        --with-stream_ssl_module \
+        --with-stream_ssl_preread_module
+	make -j$(nproc) && make install
+	chmod +x /$nuname-server/nginx/server/sbin/nginx
+	cd ../php-8.4.2
+	./configure --prefix=/$nuname-server/web/php \
+        --disable-shared \
+        --with-config-file-path=/$nuname-server/web/php/etc/ \
+        --with-curl \
+        --with-freetype \
+        --enable-gd \
+        --with-jpeg \
+        --with-gettext \
+        --with-libdir=lib64 \
+        --with-libxml \
+        --with-mysqli \
+        --with-openssl \
+        --with-pdo-mysql \
+        --with-pdo-sqlite \
+        --with-pear \
+        --enable-sockets \
+        --with-mhash \
+        --with-ldap-sasl \
+        --with-xsl \
+        --with-zlib \
+        --with-zip \
+        --with-bz2 \
+        --with-iconv \
+        --enable-fpm \
+        --enable-pdo \
+        --enable-bcmath \
+        --enable-mbregex \
+        --enable-mbstring \
+        --enable-opcache \
+        --enable-pcntl \
+        --enable-shmop \
+        --enable-soap \
+        --enable-ftp \
+        --with-xpm \
+        --enable-xml \
+        --enable-sysvsem \
+        --enable-cli \
+        --enable-intl \
+        --enable-calendar \
+        --enable-ctype \
+        --enable-mysqlnd \
+        --enable-session
+    make -j$(nproc) && make install
 cat > /$nuname-server/web/nginx/server/conf/nginx.conf <<EOF
 worker_processes auto;
 worker_rlimit_nofile 65535;
@@ -840,14 +837,14 @@ PrivateTmp=true
 [Install]
 WantedBy=multi-user.target
 EOF
-		manager::systemctl start nginx
-		elif [ $options_lnmp_value == "docker" ];then
-		   mkdir -p /$nuname-server/web/{docker-yaml,nginx/{conf,webside/default,ssl},mariadb/{init,server,import,config}}
-		   useradd -u 2233 -m -s /sbin/nologin nuoyis-web
-           if [ -z $options_mariadb_value ];then
-		        read -p "请输入mariadb root密码:" options_mariadb_value
-           fi
-		   cat > /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml << EOF
+	manager::systemctl start nginx
+}
+
+install::lnmp::docker(){
+	if [ -z $options_mariadb_value ];then
+		read -p "请输入mariadb root密码:" options_mariadb_value
+    fi
+	cat > /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml << EOF
 version: '3'
 services:
   nuoyis-lnmp-np:
@@ -866,8 +863,8 @@ services:
       - /$nuname-server/web/nginx/ssl:/nuoyis-web/nginx/ssl
       - /var/log:/nuoyis-web/logs
 EOF
-			if [ $options_nas -eq 1 ]; then
-				cat > /$nuname-server/web/nginx/server/conf/nginx.conf <<EOF
+	if [ $options_nas -eq 1 ]; then
+		cat > /$nuname-server/web/nginx/server/conf/nginx.conf <<EOF
 worker_processes auto;
 worker_rlimit_nofile 65535;
 error_log /nuoyis-web/logs/nginx/error.log warn;
@@ -909,12 +906,12 @@ http {
     include /nuoyis-web/nginx/conf/*.conf;
 }
 EOF
-				cat >> /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml << EOF
+		cat >> /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml << EOF
       - /$nuname-server/sharefile:/$nuname-server/sharefile
       - /$nuname-server/web/nginx/server/conf/nginx.conf:/nuoyis-web/nginx/server/conf/nginx.conf
 EOF
-			fi
-			cat >> /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml << EOF
+	fi
+	cat >> /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml << EOF
     shm_size: '1g'
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost"]
@@ -960,10 +957,10 @@ networks:
         - subnet: 192.168.223.0/24
           gateway: 192.168.223.1
 EOF
-cat > /$nuname-server/web/nginx/webside/default/index.html << EOF
+	cat > /$nuname-server/web/nginx/webside/default/index.html << EOF
 welcome to nuoyis's server
 EOF
-cat > /$nuname-server/web/mariadb/config/my.cnf << EOF
+	cat > /$nuname-server/web/mariadb/config/my.cnf << EOF
 [mysqld]
 server-id=1
 log_bin=mysql-bin
@@ -974,9 +971,42 @@ EOF
 	docker rm -f nuoyis-lnmp-mariadb
 	docker rm -f nuoyis-lnmp-autoheal
     docker-compose -f /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml up -d
-    	fi
+}
+
+install::lnmp(){
+	echo "安装lnmp"
+	sleep 30
+	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+		aboutserver=`systemctl is-active firewalld`
+		if [ $aboutserver == "inactive" ];then
+			manager::systemctl start firewalld
+		fi
+		firewall-cmd --set-default-zone=public
+		firewall-cmd --zone=public --add-service=http --per
+		firewall-cmd --zone=public --add-port=3306/tcp --per
+		firewall-cmd --reload
 	else
-		manager::repositories install apt-transport-https dirmngr software-properties-common ca-certificates libgd-dev libgd2-xpm-dev nginx mariadb-server mariadb-client php8.2 php8.2-mysql php8.2-fpm php8.2-gd php8.2-xmlrpc php8.2-curl php8.2-intl php8.2-mbstring php8.2-soap php8.2-zip php8.2-ldap php8.2-xsl php8.2-opcache php8.2-cli php8.2-xml php8.2-common
+		ufw enable
+		ufw allow http
+		ufw allow 3306/tcp
+	fi
+	id -u nuoyis-web >/dev/null 2>&1
+	if [ $? -eq 1 ];then
+		mkdir -p /$nuname-server/web/{docker-yaml,nginx/{server/conf,conf,webside/default,ssl},mariadb/{init,server,import,config}}
+		touch /$nuname-server/logs/nginx/{error.log,nginx.pid}
+		useradd -u 2233 -m -s /sbin/nologin nuoyis-web
+		groupadd nuoyis-web-share
+		usermod -aG nuoyis-web-share nginx
+		usermod -aG nuoyis-web-share nuoyis-web
+		chown -R root:nuoyis-web-share /$nuname-server/web/nginx/
+		chmod -R 2775 /$nuname-server/web/nginx/
+	fi
+	if [ $options_lnmp_value == "yum" ];then
+		install::lnmp::quick
+	elif [ $options_lnmp_value == "gcc" ];then
+		install::lnmp::gcc
+	elif [ $options_lnmp_value == "docker" ];then
+		install::lnmp::docker
 	fi
 }
 
@@ -1209,11 +1239,25 @@ EOF
 }
 
 conf::reposource::deb(){
-	# sudo sed -i -r 's#http://(archive|security).ubuntu.com#https://mirrors.aliyun.com#g' /etc/apt/sources.list && sudo apt-get update
-	echo "正在进入第三方脚本，请注意版本安全"
-	manager::download https://3lu.cn/main.sh
-	source main.sh
-	echo "yes"
+    if [ "$options_yum_install" == "edu" ]; then
+        apt_url="mirrors.cernet.edu.cn"
+    elif [ "$options_yum_install" == "aliyun" ]; then
+        apt_url="mirrors.aliyun.com"
+    fi
+	rm -rf /etc/apt/sources.list.d/*
+	if [ -f /etc/debian_version ]; then
+        sed -i "s/http:\/\/deb.debian.org/https:\/\/$apt_url/g" /etc/apt/sources.list
+        sed -i "s/http:\/\/security.debian.org/https:\/\/$apt_url/g" /etc/apt/sources.list
+		wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+		manager::repositories install apt-transport-https
+		echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
+		manager::repositories update
+
+    elif [ -f /etc/lsb-release ]; then
+        sed -i "s/http:\/\/archive.ubuntu.com/https:\/\/$apt_url/g" /etc/apt/sources.list
+        sed -i "s/http:\/\/security.ubuntu.com/https:\/\/$apt_url/g" /etc/apt/sources.list
+		add-apt-repository ppa:ondrej/php
+	fi
 }
 
 conf::reposource::redhat(){
@@ -1333,9 +1377,12 @@ if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
 
 	echo "正在更新源"
 	rm -rf /etc/yum.repods.d/*.rpmsave
-	manager::repositories clean
+	
+	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+		manager::repositories clean
+		manager::repositories makecache
+	fi
 	manager::repositories update
-	manager::repositories makecache
 }
 
 install::kernel(){
@@ -1356,11 +1403,7 @@ if [ $PM = "yum" ] || [ $PM = "dnf" ];then
     	grub2-set-default 0
     	grub2-mkconfig -o /boot/grub2/grub.cfg
 	fi
-else
-	# https://zichen.zone/archives/debian_linux_kernel_update.html
-	manager::repositories install linux-image-amd64 linux-headers-amd64
-fi
-cat > /nuoyis-server/shell/kernel-update.sh << EOF
+	cat > /nuoyis-server/shell/kernel-update.sh << EOF
 #!/bin/bash
 yum clean all;
 yum upgrade -y;
@@ -1368,9 +1411,14 @@ yes | dnf --disablerepo=\* --enablerepo=elrepo-kernel update kernel-ml*;
 yes | dnf remove --oldinstallonly --setopt installonly_limit=2 kernel;
 # 0 0 * * 1 bash /nuoyis-server/shell/kernel-update.sh > /nuoyis-server/logs/update.log 2>&1;
 EOF
-cat >> /etc/crontab << EOF
+	cat >> /etc/crontab << EOF
 0 0 * * 1 bash /nuoyis-server/shell/kernel-update.sh > /nuoyis-server/logs/update.log 2>&1;
 EOF
+else
+	# https://zichen.zone/archives/debian_linux_kernel_update.html
+	manager::repositories install linux-image-amd64 linux-headers-amd64
+fi
+
 }
 
 install::systemupdate(){
@@ -1523,7 +1571,11 @@ mkdir -p /$nuname-server/{openssl,logs,shell}
 # touch /$nuname-server/
 
 echo "安装核心软件包"
-manager::repositories install dnf-plugins-core python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils tar
+if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+	manager::repositories install dnf-plugins-core python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils tar
+else
+	manager::repositories install python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc g++ make unzip perl libipc-cmd-perl libtest-simple-perl pciutils tar ca-certificates curl gnupg ufw
+fi
 }
 
 conf::tuning(){
