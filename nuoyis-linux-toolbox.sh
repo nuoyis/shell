@@ -2,9 +2,10 @@
 # Script Name    : nuoyis toolbox
 # Description    : Linux quick initialization and installation
 # Create Date    : 2025-04-23
-# Update Date    : 2025-06-30
+# Update Date    : 2025-07-04
 # auth           : nuoyis
 # Webside        : blog.nuoyis.net
+# debug          : bash nuoyis-toolbox -host aliyun -r edu -ln docker -doa -na -mp test666 -ku -tu
 
 # 变量设置
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
@@ -75,8 +76,18 @@ if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
 	fi
 	case $system_name in
 		"CentOS")
-		osname="centos-stream"
-		osversion="\$releasever-stream"
+		if [ $system_version -eq 7 ];then
+			osversion="7.9.2009"
+		elif [ $system_version -eq 8 ];then
+			osname="centos-vault"
+			osversion="8.5.2111"
+		elif [ $system_version -gt 8 ];then
+			osname="centos-stream"
+			osversion="\$releasever-stream"
+		else
+			echo "no supported system"
+			exit 1
+		fi
 		;;
 		"openEuler")
 	esac
@@ -170,9 +181,13 @@ manager::repositories(){
 			$PM list installed | egrep $2 &>/dev/null
 			;;
 		"repoadd")
+			# repo添加
 			if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
-				# repo添加
-				$PM config-manager --add-repo $2
+				if [ $system_version -lt 8 ];then
+					$PM-config-manager --add-repo $2
+				else
+					$PM config-manager --add-repo $2
+				fi
 			fi
 			;;
 		*)
@@ -463,7 +478,7 @@ install::dockerapp(){
 services:
   nuoyis-apps-openlist:
     container_name: nuoyis-apps-openlist
-    image: openlistteam/openlist:latest-aio
+    image: docker.m.daocloud.io/openlistteam/openlist:latest-aio
     volumes:
       - /nuoyis-server/openlist/data:/opt/openlist/data
     ports:
@@ -475,7 +490,7 @@ services:
     restart: always
   nuoyis-apps-qinglong:
     container_name: nuoyis-apps-qinglong
-    image: whyour/qinglong:latest
+    image: docker.m.daocloud.io/whyour/qinglong
     volumes:
       - /nuoyis-server/qinglong/data:/ql/data
     ports:
@@ -498,7 +513,7 @@ services:
     restart: always
   nuoyis-apps-autorestart:
     container_name: nuoyis-apps-autorestart
-    image: willfarrell/autoheal
+    image: docker.m.daocloud.io/willfarrell/autoheal
     environment:
       - AUTOHEAL_CONTAINER_LABEL=all
     volumes:
@@ -506,7 +521,7 @@ services:
     restart: always
   nuoyis-apps-autoupdate:
     command: '--cleanup -i 3600'
-    image: docker.xuanyuan.dev/containrrr/watchtower
+    image: docker.m.daocloud.io/containrrr/watchtower
     container_name: nuoyis-apps-autoupdate
     volumes:
       - '/etc/docker/daemon.json:/etc/docker/daemon.json'
@@ -965,77 +980,120 @@ EOF
 	fi
 }
 
-conf::yumsource(){
-reponum=`$PM list | wc -l`
-
-# if [ $reponum -lt 1000 ];then
-if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
-	echo "正在检查是否存在冲突/模块缺失"
-	echo "正在检查模块依赖问题..."
-
-	options_install_check_modules_bug=$(yum check 2>&1)
-
-	if [ -z "$options_install_check_modules_bug" ]; then
-		echo "没有发现模块依赖问题,继续下一步"
-	else
-		echo "发现模块依赖问题："
-		# 提取并禁用冲突的模块
-		echo "正在禁用冲突模块"
-		while read -r module; do
-			# 提取模块名和版本
-			module_name=$(echo $module | grep -oP '(?<=module )[^:]+:[^ ]+' | sed 's/:[^:]*$//')
-			if [ -n "$module_name" ]; then
-				echo "禁用模块: $module_name"
-				sudo yum module disable "$module_name" -y
-				if [ $? -eq 0 ]; then
-					echo "模块 $module_name 禁用成功"
-				else
-					echo "模块 $module_name 禁用失败"
-				fi
-			fi
-		done <<< "$options_install_check_modules_bug"
-		echo "模块依赖修复和冲突模块禁用完成。"
+conf::reposource::centos-vault(){
+	if [ "$options_yum_install" == "edu" ];then
+		yumurl="mirrors.cernet.edu.cn"
+	elif [ "$options_yum_install" == "aliyun" ];then
+		yumurl="mirrors.aliyun.com"
 	fi
-
-	# 判断源站
-	if [ "$options_yum_install" == "other" ]; then
-		manager::download https://3lu.cn/main.sh
-		source main.sh
-		echo "yes"
-	else
-		if [ $system_name != "openEuler" ];then
-			if [ ! -d /etc/yum.repos.d/bak ];then
-				mkdir -p /etc/yum.repos.d/bak
-			fi
-			mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
-			mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
-			if [ "$options_yum_install" == "edu" ];then
-				yumurl="mirrors.cernet.edu.cn"
-				if [ $system_name = "Rocky" ]; then
-					osname="rocky"
-				fi
-			elif [ "$options_yum_install" == "aliyun" ];then
-				yumurl="mirrors.aliyun.com"
-				if [ $system_name = "Rocky" ]; then
-					osname="rockylinux"
-				fi
-			fi
-            cat > /etc/yum.repos.d/$nuname.repo << EOF
-[${nuname}-BaseOS]
-name=${nuname} - BaseOS
-baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/\$basearch/os/
+	curl -o /etc/yum.repos.d/epel.repo -L https://mirrors.aliyun.com/repo/epel-7.repo
+	# sed -i "s|http://mirrors.aliyun.com/centos/\$releasever|https://${yumurl}/centos-vault/$osversion|g" /etc/yum.repos.d/CentOS-Base.repo
+	cat > /etc/yum.repos.d/CentOS-Base.repo << EOF
+[base]
+name=CentOS-$osversion - Base - mirrors.aliyun.com
+failovermethod=priority
+baseurl=https://${yumurl}/centos-vault/$osversion/os/\$basearch/
 gpgcheck=1
-gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
-enabled=1
-countme=1
-metadata_expire=6h
-priority=1
+gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
 
+[updates]
+name=CentOS-$osversion - Updates - mirrors.aliyun.com
+failovermethod=priority
+baseurl=https://${yumurl}/centos-vault/$osversion/updates/\$basearch/
+gpgcheck=1
+gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
+
+[extras]
+name=CentOS-$osversion - Extras - mirrors.aliyun.com
+failovermethod=priority
+baseurl=https://${yumurl}/centos-vault/$osversion/extras/\$basearch/
+gpgcheck=1
+gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
+
+[centosplus]
+name=CentOS-$osversion - Plus - mirrors.aliyun.com
+failovermethod=priority
+baseurl=https://${yumurl}/centos-vault/$osversion/centosplus/\$basearch/
+gpgcheck=1
+enabled=0
+gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
+
+[contrib]
+name=CentOS-$osversion - Contrib - mirrors.aliyun.com
+failovermethod=priority
+baseurl=https://${yumurl}/centos-vault/$osversion/contrib/\$basearch/
+gpgcheck=1
+enabled=0
+gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
+EOF
+
+	manager::repositories install https://${yumurl}/remi/enterprise/remi-release-$system_version.rpm
+
+	sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+		-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+		-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+		-i  /etc/yum.repos.d/remi*.repo
+	sed -e 's!^metalink=!#metalink=!g' \
+		-e 's!^#baseurl=!baseurl=!g' \
+		-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
+		-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
+		-i /etc/yum.repos.d/epel{,*}.repo
+}
+
+conf::reposource::yum(){
+	if [ "$options_yum_install" == "edu" ];then
+		yumurl="mirrors.cernet.edu.cn"
+		if [ $system_name = "Rocky" ]; then
+			osname="rocky"
+		fi
+	elif [ "$options_yum_install" == "aliyun" ];then
+		yumurl="mirrors.aliyun.com"
+		if [ $system_name = "Rocky" ]; then
+			osname="rockylinux"
+		fi
+	fi
+	if [ $system_version -eq 8 ];then
+		gpgcheck="0"
+		cat >> /etc/yum.repos.d/$nuname.repo << EOF
+[highavailability]
+name=${nuname} - HighAvailability
+baseurl=https://${yumurl}/${osname}/${osversion}/HighAvailability/\$basearch/os/
+gpgchek=0
+enabled=1
+
+[extras]
+name=${nuname} - Extras
+baseurl=https://${yumurl}/${osname}/${osversion}/extras/\$basearch/os/
+gpgchek=0
+enabled=1
+
+[PowerTools]
+name=${nuname} - PowerTools
+baseurl=https://${yumurl}/${osname}/${osversion}/PowerTools/\$basearch/os/
+gpgchek=0
+enabled=1
+
+[extras]
+name=${nuname} - Extras
+baseurl=https://${yumurl}/${osname}/${osversion}/extras/\$basearch/os/
+gpgchek=0
+enabled=1
+
+[centosplus]
+name=${nuname} - centosplus
+baseurl=https://${yumurl}/${osname}/${osversion}/centosplus/\$basearch/os/
+gpgchek=0
+enabled=1
+EOF
+	else
+		gpgcheck="1"
+		gpgkey="gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever"
+		cat >> /etc/yum.repos.d/$nuname.repo << EOF
 [${nuname}-baseos-debuginfo]
 name=${nuname} - BaseOS - Debug
 baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/\$basearch/debug/tree/
-gpgcheck=1
-gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
+gpgcheck=${gpgcheck}
+${gpgkey}
 enabled=1
 countme=1
 metadata_expire=6h
@@ -1044,18 +1102,8 @@ priority=1
 [${nuname}-baseos-source]
 name=${nuname} - BaseOS - Source
 baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/source/tree/
-gpgcheck=1
-gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
-enabled=1
-countme=1
-metadata_expire=6h
-priority=1
-
-[${nuname}-appstream]
-name=${nuname} - AppStream
-baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/\$basearch/os/
-gpgcheck=1
-gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
+gpgcheck=${gpgcheck}
+${gpgkey}
 enabled=1
 countme=1
 metadata_expire=6h
@@ -1064,8 +1112,8 @@ priority=1
 [${nuname}-appstream-debuginfo]
 name=${nuname} - AppStream - Debug
 baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/\$basearch/debug/tree/
-gpgcheck=1
-gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
+gpgcheck=${gpgcheck}
+${gpgkey}
 enabled=1
 countme=1
 metadata_expire=6h
@@ -1074,8 +1122,8 @@ priority=1
 [${nuname}-appstream-source]
 name=${nuname} - AppStream - Source
 baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/source/tree/
-gpgcheck=1
-gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
+gpgcheck=${gpgcheck}
+${gpgkey}
 enabled=1
 countme=1
 metadata_expire=6h
@@ -1084,8 +1132,8 @@ priority=1
 [${nuname}-crb]
 name=${nuname} - CRB
 baseurl=https://${yumurl}/${osname}/${osversion}/CRB/\$basearch/os/
-gpgcheck=1
-gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
+gpgcheck=${gpgcheck}
+${gpgkey}
 enabled=1
 countme=1
 metadata_expire=6h
@@ -1094,8 +1142,8 @@ priority=1
 [${nuname}-crb-debuginfo]
 name=${nuname} - CRB - Debug
 baseurl=https://${yumurl}/${osname}/${osversion}/CRB/\$basearch/debug/tree/
-gpgcheck=1
-gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
+gpgcheck=${gpgcheck}
+${gpgkey}
 enabled=1
 countme=1
 metadata_expire=6h
@@ -1104,105 +1152,183 @@ priority=1
 [${nuname}-crb-source]
 name=${nuname} - CRB - Source
 baseurl=https://${yumurl}/${osname}/${osversion}/CRB/source/tree/
-gpgcheck=1
-gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever
+gpgcheck=${gpgcheck}
+${gpgkey}
 enabled=1
 countme=1
 metadata_expire=6h
 priority=1
 EOF
-			echo "skip_broken=True" >> /etc/yum.conf
-			echo "skip_broken=True" >> /etc/dnf/dnf.conf
+	fi
+    cat >> /etc/yum.repos.d/$nuname.repo << EOF
+[${nuname}-BaseOS]
+name=${nuname} - BaseOS
+baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/\$basearch/os/
+gpgcheck=${gpgcheck}
+${gpgkey}
+enabled=1
+countme=1
+metadata_expire=6h
+priority=1
 
-			echo "正在配置附加源"
-			manager::repositories installcheck epel
-			if [ $? -eq 0 ];then
-				manager::repositories remove epel-release epel-next-release
-			fi
+[${nuname}-appstream]
+name=${nuname} - AppStream
+baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/\$basearch/os/
+gpgcheck=${gpgcheck}
+${gpgkey}
+enabled=1
+countme=1
+metadata_expire=6h
+priority=1
+EOF
+	echo "skip_broken=True" >> /etc/yum.conf
+	echo "skip_broken=True" >> /etc/dnf/dnf.conf
+	echo "正在配置附加源"
 
-			manager::repositories installcheck remi
-			if [ $? -eq 0 ];then
-				manager::repositories remove remi-release-9.4-2.el9.remi.noarch
-			fi
+	manager::repositories install https://mirrors.aliyun.com/epel/epel-release-latest-$system_version.noarch.rpm
+	if [ $system_version -lt 10 ]; then
+		rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
+	else
+		rpm --import https://www.elrepo.org/RPM-GPG-KEY-v2-elrepo.org
+	fi
+	rm -rf /etc/yum.repos.d/epel-cisco-openh264.repo
+	sed -e 's!^metalink=!#metalink=!g' \
+		-e 's!^#baseurl=!baseurl=!g' \
+		-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
+		-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
+		-i /etc/yum.repos.d/epel{,*}.repo
+	manager::repositories install https://${yumurl}/remi/enterprise/remi-release-$system_version.rpm
+	sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+		-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+		-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+		-i  /etc/yum.repos.d/remi*.repo
+	manager::repositories install https://www.elrepo.org/elrepo-release-$system_version.el$system_version.elrepo.noarch.rpm
+	sed -e 's/http:\/\/elrepo.org\/linux/https:\/\/mirrors.aliyun.com\/elrepo/g' \
+		-e 's/mirrorlist=/#mirrorlist=/g' \
+		-i /etc/yum.repos.d/elrepo.repo
+}
 
-			manager::repositories installcheck elrepo
-			if [ $? -eq 0 ];then
-				manager::repositories remove elrepo-release.noarch
-			fi
+conf::reposource::deb(){
+	# sudo sed -i -r 's#http://(archive|security).ubuntu.com#https://mirrors.aliyun.com#g' /etc/apt/sources.list && sudo apt-get update
+	echo "正在进入第三方脚本，请注意版本安全"
+	manager::download https://3lu.cn/main.sh
+	source main.sh
+	echo "yes"
+}
 
-			manager::repositories install https://mirrors.aliyun.com/epel/epel-release-latest-$system_version.noarch.rpm
-			if [ $system_version -lt 10 ]; then
-				rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
-				https://mirrors.aliyun.com/epel/epel-next-release-latest-$system_version.noarch.rpm
+conf::reposource::redhat(){
+	echo "正在对RHEL 9系列系统进行openssl系统特调"
+	manager::repositories remove subscription-manager-gnome     
+	manager::repositories remove subscription-manager-firstboot     
+	manager::repositories remove subscription-manager
+	rpm -e --nodeps openssl-fips-provider
+	rpm -e --nodeps redhat-logos
+	rpm -e --nodeps redhat-release
+	rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
+	manager::download https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+	manager::download https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+	manager::download https://shell.nuoyis.net/download/rocky-repos-9.5-1.2.el9.noarch.rpm
+	manager::download https://shell.nuoyis.net/download/rocky-release-9.5-1.2.el9.noarch.rpm
+	sudo rm -rf /usr/share/redhat-release
+	rpm -ivh --force --nodeps openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+	rpm -ivh --force --nodeps openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+	rpm -ivh --force --nodeps rocky-repos-9.5-1.2.el9.noarch.rpm
+	rpm -ivh --force --nodeps rocky-release-9.5-1.2.el9.noarch.rpm
+	rm -rf openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+	rm -rf openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+	rm -rf rocky-repos-9.5-1.2.el9.noarch.rpm
+	rm -rf rocky-release-9.5-1.2.el9.noarch.rpm
+	rm -rf /etc/yum.repos.d/rocky*.repo
+	# 可视化处理
+	# sudo dnf groupinstall "Server with GUI"
+	# manager::repositories install https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+	if [ -d /sys/firmware/efi ] && [ -d /boot/efi/EFI/redhat ];then
+		echo "你的Boot分区为EFI，正在进行特别优化"
+		mv /boot/efi/EFI/redhat/ /boot/efi/EFI/rocky
+		bootid=$(efibootmgr | grep BootCurrent | egrep -o "[0-9]+")
+		efi_uuid=$(efibootmgr -v | grep -A 1 "Boot"$bootid  | egrep -o '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+		efi_id=$(lsblk -o NAME,UUID,PARTUUID | grep $efi_uuid |  egrep -o '[n|v][[:alnum:]]+')
+		diskname=$(echo $efi_id | sed 's/[0-9]*$//; s/p[0-9]*$//')
+		efi_disknumber=$(echo $efi_id | egrep -o '[0-9]$')
+		sudo efibootmgr -b $bootid -B
+		sudo efibootmgr --create --disk "/dev/$diskname" --part $efi_disknumber --label "nuoyis-redhat Linux" --loader "\EFI\rocky\shimx64.efi"
+		sudo grub2-mkconfig -o /boot/efi/EFI/rocky/grub.cfg
+	fi
+}
+
+conf::reposource(){
+reponum=`$PM list | wc -l`
+
+# if [ $reponum -lt 1000 ];then
+if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
+	echo "正在移动源到/etc/yum.repos.d/bak"
+	if [ ! -d /etc/yum.repos.d/bak ];then
+		mkdir -p /etc/yum.repos.d/bak
+	fi
+	mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
+	mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
+
+	# 判断源站
+	if [ "$options_yum_install" == "other" ]; then
+		manager::download https://3lu.cn/main.sh
+		source main.sh
+		echo "yes"
+	else
+	manager::repositories installcheck epel
+	if [ $? -eq 0 ];then
+		manager::repositories remove epel-release epel-next-release
+	fi
+
+	manager::repositories installcheck remi
+	if [ $? -eq 0 ];then
+		manager::repositories remove remi-release.remi.noarch
+	fi
+
+	manager::repositories installcheck elrepo
+	if [ $? -eq 0 ];then
+		manager::repositories remove elrepo-release.noarch
+	fi
+		if [ $system_name != "openEuler" ];then
+			if [ $system_version -gt 7 ];then
+				echo "正在检查是否存在冲突/模块缺失"
+				echo "正在检查模块依赖问题..."
+				options_install_check_modules_bug=$($PM check 2>&1)
+				if [ -z "$options_install_check_modules_bug" ]; then
+					echo "没有发现模块依赖问题,继续下一步"
+				else
+					echo "发现模块依赖问题："
+					# 提取并禁用冲突的模块
+					echo "正在禁用冲突模块"
+					while read -r module; do
+						# 提取模块名和版本
+						module_name=$(echo $module | grep -oP '(?<=module )[^:]+:[^ ]+' | sed 's/:[^:]*$//')
+						if [ -n "$module_name" ]; then
+							echo "禁用模块: $module_name"
+							sudo yum module disable "$module_name" -y
+							if [ $? -eq 0 ]; then
+								echo "模块 $module_name 禁用成功"
+							else
+								echo "模块 $module_name 禁用失败"
+							fi
+						fi
+						done <<< "$options_install_check_modules_bug"
+						echo "模块依赖修复和冲突模块禁用完成。"
+					fi
+				conf::reposource::yum
 			else
-				rpm --import https://www.elrepo.org/RPM-GPG-KEY-v2-elrepo.org
+				conf::reposource::centos-vault
 			fi
-			rm -rf /etc/yum.repos.d/epel-cisco-openh264.repo
-			sed -e 's!^metalink=!#metalink=!g' \
-			    -e 's!^#baseurl=!baseurl=!g' \
-			    -e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
-			    -e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
-			    -i /etc/yum.repos.d/epel{,*}.repo
-			manager::repositories install https://mirrors.aliyun.com/remi/enterprise/remi-release-$system_version.rpm
-			sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-			    -e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-			    -e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-			    -i  /etc/yum.repos.d/remi*.repo
-			manager::repositories install https://www.elrepo.org/elrepo-release-$system_version.el$system_version.elrepo.noarch.rpm
-			sed -e 's/http:\/\/elrepo.org\/linux/https:\/\/mirrors.aliyun.com\/elrepo/g' \
-			    -e 's/mirrorlist=/#mirrorlist=/g' \
-				-i /etc/yum.repos.d/elrepo.repo
 		else
 			sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
 		fi
 	fi
 	elif [ $PM = "apt" ];then
-		# sudo sed -i -r 's#http://(archive|security).ubuntu.com#https://mirrors.aliyun.com#g' /etc/apt/sources.list && sudo apt-get update
-		echo "正在进入第三方脚本，请注意版本安全"
-		manager::download https://3lu.cn/main.sh
-		source main.sh
-		echo "yes"
+		conf::reposource::deb
 	fi
 
 	# 红帽系统特调
 	if [ $system_name == "Red" ];then
-		echo "正在对RHEL系统进行openssl系统特调"
-		manager::repositories remove subscription-manager-gnome     
-		manager::repositories remove subscription-manager-firstboot     
-		manager::repositories remove subscription-manager
-		rpm -e --nodeps openssl-fips-provider
-		rpm -e --nodeps redhat-logos
-		rpm -e --nodeps redhat-release
-		rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
-		manager::download https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
-		manager::download https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		manager::download https://shell.nuoyis.net/download/rocky-repos-9.5-1.2.el9.noarch.rpm
-		manager::download https://shell.nuoyis.net/download/rocky-release-9.5-1.2.el9.noarch.rpm
-		sudo rm -rf /usr/share/redhat-release
-		rpm -ivh --force --nodeps openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
-		rpm -ivh --force --nodeps openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		rpm -ivh --force --nodeps rocky-repos-9.5-1.2.el9.noarch.rpm
-		rpm -ivh --force --nodeps rocky-release-9.5-1.2.el9.noarch.rpm
-		rm -rf openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
-		rm -rf openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		rm -rf rocky-repos-9.5-1.2.el9.noarch.rpm
-		rm -rf rocky-release-9.5-1.2.el9.noarch.rpm
-		rm -rf /etc/yum.repos.d/rocky*.repo
-		# 可视化处理
-		# sudo dnf groupinstall "Server with GUI"
-		# manager::repositories install https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-		if [ -d /sys/firmware/efi ] && [ -d /boot/efi/EFI/redhat ];then
-			echo "你的Boot分区为EFI，正在进行特别优化"
-			mv /boot/efi/EFI/redhat/ /boot/efi/EFI/rocky
-			bootid=$(efibootmgr | grep BootCurrent | egrep -o "[0-9]+")
-			efi_uuid=$(efibootmgr -v | grep -A 1 "Boot"$bootid  | egrep -o '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
-			efi_id=$(lsblk -o NAME,UUID,PARTUUID | grep $efi_uuid |  egrep -o '[n|v][[:alnum:]]+')
-			diskname=$(echo $efi_id | sed 's/[0-9]*$//; s/p[0-9]*$//')
-			efi_disknumber=$(echo $efi_id | egrep -o '[0-9]$')
-			sudo efibootmgr -b $bootid -B
-			sudo efibootmgr --create --disk "/dev/$diskname" --part $efi_disknumber --label "nuoyis-redhat Linux" --loader "\EFI\rocky\shimx64.efi"
-			sudo grub2-mkconfig -o /boot/efi/EFI/rocky/grub.cfg
-		fi
+		conf::reposource::redhat
 	fi
 
 	echo "正在更新源"
@@ -1215,9 +1341,21 @@ EOF
 install::kernel(){
 echo "内核更最新"
 if [ $PM = "yum" ] || [ $PM = "dnf" ];then
-manager::repositories installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml.x86_64
-manager::repositories remove kernel-tools-libs.x86_64 kernel-tools.x86_64
-manager::repositories installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml-tools.x86_64
+	if [ $system_version -gt 9 ];then
+		manager::repositories installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml.x86_64
+		manager::repositories remove kernel-tools-libs.x86_64 kernel-tools.x86_64
+		manager::repositories installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml-tools.x86_64
+	elif [ $system_version -eq 7 ];then
+		wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
+    	wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-headers-5.4.226-1.el7.elrepo.x86_64.rpm
+    	wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
+    	rpm -ivh kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
+    	rpm -ivh kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
+    	yum remove kernel-headers -y
+    	rpm -ivh kernel-lt-headers-5.4.226-1.el7.elrepo.x86_64.rpm
+    	grub2-set-default 0
+    	grub2-mkconfig -o /boot/grub2/grub.cfg
+	fi
 else
 	# https://zichen.zone/archives/debian_linux_kernel_update.html
 	manager::repositories install linux-image-amd64 linux-headers-amd64
@@ -1235,23 +1373,14 @@ cat >> /etc/crontab << EOF
 EOF
 }
 
-install::main(){
-echo "核心函数检查和安装"
-echo "检测hostname是否设置"
-HOSTNAME_CHECK=$(cat /etc/hostname)
-if [ -z $HOSTNAME_CHECK ];then
-	echo "当前主机名hostname为空，设置默认hostname"
-	hostnamectl set-hostname $nuname-init-shell
-fi
-
+install::systemupdate(){
 echo "正在检查版本是否支持"
 if [ $PM == "yum" ] && [ $system_name != "openEuler" ];then
 	if [ $system_version -lt 9 ];then
-		echo "不受支持版本,正在检测你的系统"
 		if [ $system_version -eq 8 ] && [ $system_name == "Rocky" ];then
-			read -p "是否进行版本更新，否则只提供基础配置(y/n):" options_update
+			read -p "是否进行版本更新" options_update
 			if [ $options_update == "n" ];then
-        		echo "正在退出脚本"
+        		echo "请重新执行脚本继续完成初始化"
        	 		exit 0
 			else
 				echo -e "警告！！！"
@@ -1259,7 +1388,7 @@ if [ $PM == "yum" ] && [ $system_name != "openEuler" ];then
 				echo -e "重启后需要重新执行该命令操作下一步，如果同意更新请输入y,更新出现任何问题与作者无关"
 				read -p "是否进行版本更新，反之退出脚本(y/n):" options_update_again
 				if [ $options_update_again == "n" ];then
-        			echo "正在退出脚本"
+        			echo "请重新执行脚本继续完成初始化"
        	 			exit 0
 				else
 					options_source_installer
@@ -1319,14 +1448,42 @@ if [ $PM == "yum" ] && [ $system_name != "openEuler" ];then
 				fi
 			fi
 		elif [ $system_version -eq 7 ] && [ $system_name == "Centos" ];then
-			echo "等待更新"
+			echo -e "警告！！！"
+			echo -e "请保证升级8之前，请先检查是否有重要备份数据，不过本脚本作者精心提醒:生产环境就不要执行脚本了，如果是不重要数据或者新安装的可以执行"
+			echo -e "重启后需要重新执行该命令操作下一步，如果同意更新请输入y,更新出现任何问题与作者无关"
+			read -p "是否进行版本更新，反之退出脚本(y/n):" options_update_again
+			if [ $options_update_again == "n" ];then
+        		echo "请重新执行脚本继续完成初始化"
+       	 		exit 0
+			else
+				echo "等待更新"
+			fi
 		elif [ $system_version -eq 8 ] && [ $system_name == "Centos" ];then
-			echo "等待更新"
+			echo -e "警告！！！"
+			echo -e "请保证升级8之前，请先检查是否有重要备份数据，不过本脚本作者精心提醒:生产环境就不要执行脚本了，如果是不重要数据或者新安装的可以执行"
+			echo -e "重启后需要重新执行该命令操作下一步，如果同意更新请输入y,更新出现任何问题与作者无关"
+			read -p "是否进行版本更新，反之退出脚本(y/n):" options_update_again
+			if [ $options_update_again == "n" ];then
+        		echo "请重新执行脚本继续完成初始化"
+       	 		exit 0
+			else
+				echo "等待更新"
+			fi
 		else
-			echo "不受脚本支持的系统，请更换后再试"
+			echo "不支持的系统，请更换后再试"
 			exit 1
 		fi
 	fi
+fi
+}
+
+install::main(){
+echo "核心函数检查和安装"
+echo "检测hostname是否设置"
+HOSTNAME_CHECK=$(cat /etc/hostname)
+if [ -z $HOSTNAME_CHECK ];then
+	echo "当前主机名hostname为空，设置默认hostname"
+	hostnamectl set-hostname $nuname-init-shell
 fi
 
 # 检查是否已有 swap 文件存在
@@ -1366,7 +1523,7 @@ mkdir -p /$nuname-server/{openssl,logs,shell}
 # touch /$nuname-server/
 
 echo "安装核心软件包"
-manager::repositories install dnf-plugins-core python3 pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils tar
+manager::repositories install dnf-plugins-core python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils tar
 }
 
 conf::tuning(){
@@ -1436,7 +1593,7 @@ show::help(){
 IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
   -ln, --lnmp          install nuoyis version lnmp. Options: gcc docker yum
   -do, --dockerinstall install docker
-  -doa, --dockerapp    install docker app (qinglong and alist ...)
+  -doa, --dockerapp    install docker app (qinglong and openlist ...)
   -na, --nas           install vsftpd nginx and nfs
   -oll, --ollama       install ollama
   -bt, --btpanelenable install bt panel
@@ -1484,7 +1641,7 @@ while [[ $# -gt 0 ]]; do
             fi
             options_yum_install=$2
             options_yum=1
-            # conf::yumsource
+            # conf::reposource
             shift 2
             ;;
         -ln|--lnmp)
@@ -1573,7 +1730,7 @@ fi
 
 # 下面开始依据变量值执行函数
 if [[ $options_yum -eq 1 ]]; then
-  conf::yumsource
+  conf::reposource
 fi
 
 if [[ ! -f /root/.toolbox-install-init.lock ]]; then
