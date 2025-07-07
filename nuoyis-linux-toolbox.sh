@@ -747,8 +747,8 @@ install::lnmp::gcc(){
 cat > /$nuname-server/web/nginx/server/conf/nginx.conf <<EOF
 worker_processes auto;
 worker_rlimit_nofile 65535;
-error_log /nuoyis-server/logs/nginx/error.log warn;
-pid /nuoyis-server/logs/nginx/nginx.pid;
+error_log /$nuname-server/web/logs/nginx/error.log warn;
+pid /$nuname-server/web/logs/nginx/nginx.pid;
 
 events {
     worker_connections 2048;
@@ -762,7 +762,7 @@ http {
                      '\$status \$body_bytes_sent "\$http_referer" '
                      '"\$http_user_agent" "\$http_x_forwarded_for"';
 
-    access_log /nuoyis-server/logs/nginx/access.log main;
+    access_log /$nuname-server/web/logs/nginx/access.log main;
 
     sendfile on;
     tcp_nopush on;
@@ -861,7 +861,7 @@ services:
       - /$nuname-server/web/nginx/conf:/nuoyis-web/nginx/conf
       - /$nuname-server/web/nginx/webside:/nuoyis-web/nginx/webside
       - /$nuname-server/web/nginx/ssl:/nuoyis-web/nginx/ssl
-      - /var/log:/nuoyis-web/logs
+      - /$nuname-server/web/logs/nginx:/nuoyis-web/logs
 EOF
 	if [ $options_nas -eq 1 ]; then
 		cat > /$nuname-server/web/nginx/server/conf/nginx.conf <<EOF
@@ -923,7 +923,7 @@ EOF
     restart: always
   nuoyis-lnmp-mariadb:
     container_name: nuoyis-lnmp-mariadb
-    image: docker.m.daocloud.io/mariadb:latest
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mariadb:latest
     networks: 
       nuoyis-net:
         aliases:
@@ -992,8 +992,8 @@ install::lnmp(){
 	fi
 	id -u nuoyis-web >/dev/null 2>&1
 	if [ $? -eq 1 ];then
-		mkdir -p /$nuname-server/web/{docker-yaml,nginx/{server/conf,conf,webside/default,ssl},mariadb/{init,server,import,config}}
-		touch /$nuname-server/logs/nginx/{error.log,nginx.pid}
+		mkdir -p /$nuname-server/web/{logs/nginx,docker-yaml,nginx/{server/conf,conf,webside/default,ssl},mariadb/{init,server,import,config}}
+		touch /$nuname-server/web/logs/nginx/{error.log,nginx.pid}
 		useradd -u 2233 -m -s /sbin/nologin nuoyis-web
 		groupadd nuoyis-web-share
 		usermod -aG nuoyis-web-share nginx
