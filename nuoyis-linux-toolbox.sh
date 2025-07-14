@@ -33,7 +33,6 @@ options_bt=0
 #自动获取变量区域
 startTime=`date +%Y%m%d-%H:%M:%S`
 startTime_s=`date +%s`
-osversion="\$releasever"
 whois=$(whoami)
 # nuo_setnetwork_shell=$(ip a | grep -E '^[0-9]+: ' | grep -v lo | awk '{print $2}' | sed 's/://')
 nuo_setnetwork_shell=$(ip a | grep -oE "inet ([0-9]{1,3}.){3}[0-9]{1,3}" | awk 'NR==2 {print $2}')
@@ -71,8 +70,10 @@ trap 'exit_type=SIGHUP; exit::backoff' SIGHUP
 if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
 	if [ $system_version -lt 8 ]; then
     	PM="yum"
+		PMpath="/etc/yum.conf"
 	else
 		PM="dnf"
+		PMpath="/etc/dnf/dnf.conf"
 	fi
 	case $system_name in
 		"CentOS")
@@ -844,6 +845,9 @@ install::lnmp::docker(){
 	if [ -z $options_mariadb_value ];then
 		read -p "请输入mariadb root密码:" options_mariadb_value
     fi
+	touch /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml
+	touch /$nuname-server/web/mariadb/config/my.cnf
+	touch /$nuname-server/web/nginx/webside/default/index.html
 	cat > /$nuname-server/docker-yaml/nuoyis-docker-lnmp.yaml << EOF
 version: '3'
 services:
@@ -1081,37 +1085,42 @@ conf::reposource::yum(){
 		if [ $system_name = "Rocky" ]; then
 			osname="rockylinux"
 		fi
+	elif [ "$options_yum_install" == "original" ]; then
+		if [ $system_name = "Rocky" ]; then
+			yumurl="dl.rockylinux.org"
+			osname="pub/rocky"
+		fi
 	fi
 	if [ $system_version -eq 8 ];then
 		gpgcheck="0"
 		cat >> /etc/yum.repos.d/$nuname.repo << EOF
 [highavailability]
 name=${nuname} - HighAvailability
-baseurl=https://${yumurl}/${osname}/${osversion}/HighAvailability/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/\$releasever/HighAvailability/\$basearch/os/
 gpgchek=0
 enabled=1
 
 [extras]
 name=${nuname} - Extras
-baseurl=https://${yumurl}/${osname}/${osversion}/extras/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/\$releasever/extras/\$basearch/os/
 gpgchek=0
 enabled=1
 
 [PowerTools]
 name=${nuname} - PowerTools
-baseurl=https://${yumurl}/${osname}/${osversion}/PowerTools/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/\$releasever/PowerTools/\$basearch/os/
 gpgchek=0
 enabled=1
 
 [extras]
 name=${nuname} - Extras
-baseurl=https://${yumurl}/${osname}/${osversion}/extras/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/\$releasever/extras/\$basearch/os/
 gpgchek=0
 enabled=1
 
 [centosplus]
 name=${nuname} - centosplus
-baseurl=https://${yumurl}/${osname}/${osversion}/centosplus/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/\$releasever/centosplus/\$basearch/os/
 gpgchek=0
 enabled=1
 EOF
@@ -1121,7 +1130,7 @@ EOF
 		cat >> /etc/yum.repos.d/$nuname.repo << EOF
 [${nuname}-baseos-debuginfo]
 name=${nuname} - BaseOS - Debug
-baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/\$basearch/debug/tree/
+baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/\$basearch/debug/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
 enabled=1
@@ -1131,7 +1140,7 @@ priority=1
 
 [${nuname}-baseos-source]
 name=${nuname} - BaseOS - Source
-baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/source/tree/
+baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/source/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
 enabled=1
@@ -1141,7 +1150,7 @@ priority=1
 
 [${nuname}-appstream-debuginfo]
 name=${nuname} - AppStream - Debug
-baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/\$basearch/debug/tree/
+baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/\$basearch/debug/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
 enabled=1
@@ -1151,7 +1160,7 @@ priority=1
 
 [${nuname}-appstream-source]
 name=${nuname} - AppStream - Source
-baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/source/tree/
+baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/source/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
 enabled=1
@@ -1161,7 +1170,7 @@ priority=1
 
 [${nuname}-crb]
 name=${nuname} - CRB
-baseurl=https://${yumurl}/${osname}/${osversion}/CRB/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/\$releasever/CRB/\$basearch/os/
 gpgcheck=${gpgcheck}
 ${gpgkey}
 enabled=1
@@ -1171,7 +1180,7 @@ priority=1
 
 [${nuname}-crb-debuginfo]
 name=${nuname} - CRB - Debug
-baseurl=https://${yumurl}/${osname}/${osversion}/CRB/\$basearch/debug/tree/
+baseurl=https://${yumurl}/${osname}/\$releasever/CRB/\$basearch/debug/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
 enabled=1
@@ -1181,7 +1190,7 @@ priority=1
 
 [${nuname}-crb-source]
 name=${nuname} - CRB - Source
-baseurl=https://${yumurl}/${osname}/${osversion}/CRB/source/tree/
+baseurl=https://${yumurl}/${osname}/\$releasever/CRB/source/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
 enabled=1
@@ -1193,7 +1202,7 @@ EOF
     cat >> /etc/yum.repos.d/$nuname.repo << EOF
 [${nuname}-BaseOS]
 name=${nuname} - BaseOS
-baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/\$basearch/os/
 gpgcheck=${gpgcheck}
 ${gpgkey}
 enabled=1
@@ -1203,7 +1212,7 @@ priority=1
 
 [${nuname}-appstream]
 name=${nuname} - AppStream
-baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/\$basearch/os/
 gpgcheck=${gpgcheck}
 ${gpgkey}
 enabled=1
@@ -1211,8 +1220,11 @@ countme=1
 metadata_expire=6h
 priority=1
 EOF
-	echo "skip_broken=True" >> /etc/yum.conf
-	echo "skip_broken=True" >> /etc/dnf/dnf.conf
+	sed -i '/^skip_broken/d; /^max_parallel_downloads/d; /^metadata_expire/d' $PMpath
+	echo "skip_broken=True" >> $PMpath
+	echo "max_parallel_downloads=20" >> $PMpath
+	echo "metadata_expire=15m" >> $PMpath
+
 	echo "正在配置附加源"
 
 	manager::repositories install https://mirrors.aliyun.com/epel/epel-release-latest-$system_version.noarch.rpm
@@ -1227,7 +1239,7 @@ EOF
 		-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
 		-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
 		-i /etc/yum.repos.d/epel{,*}.repo
-	manager::repositories install https://${yumurl}/remi/enterprise/remi-release-$system_version.rpm
+	manager::repositories install https://mirrors.aliyun.com/remi/enterprise/remi-release-$system_version.rpm
 	sed -e 's|^mirrorlist=|#mirrorlist=|g' \
 		-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
 		-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
@@ -1652,12 +1664,13 @@ IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
   -ku, --kernelupdate  install use elrepo to update kernel
   -n, --name           config yum name and folder name
   -host,--hostname     config default is options_toolbox_init,so you have use this options before install
-  -r,  --mirror        config yum mirrors update,if you not used, it will not be executed. Options: edu aliyun other
+  -r,  --mirror        config yum mirrors update,if you not used, it will not be executed. Options: edu aliyun original other
   -tu, --tuning	       config linux system tuning
   -sw, --swap          config Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
   -mp, --mysqlpassword config nuoyis-lnmp-np password set  
   -h,  --help          show shell help
   -sha, --sha256sum    show shell's sha256sum
+  exam: nuoyis-toolbox -n nuoyis -host nuoyis-us-1 -r original -ln docker -ku -tu -mp 123456
 EOF
 
 echo "welcome to use nuoyis's toolbox"
@@ -1686,7 +1699,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -r|--mirror)
-            if [[ "$2" != "aliyun" && "$2" != "edu" && "$2" != "other" ]]; then
+            if [[ "$2" != "aliyun" && "$2" != "edu" && "$2" != "original" && "$2" != "other" ]]; then
                 echo "unknown volume: $2"
                 show::help
                 exit 1
