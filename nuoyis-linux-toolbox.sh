@@ -2,7 +2,7 @@
 # Script Name    : nuoyis toolbox
 # Description    : Linux quick initialization and installation
 # Create Date    : 2025-04-23
-# Update Date    : 2025-07-04
+# Update Date    : 2025-07-14
 # auth           : nuoyis
 # Webside        : blog.nuoyis.net
 # debug          : bash nuoyis-toolbox -host aliyun -r edu -ln docker -doa -na -mp test666 -ku -tu
@@ -1400,7 +1400,7 @@ if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
 install::kernel(){
 echo "内核更最新"
 if [ $PM = "yum" ] || [ $PM = "dnf" ];then
-	if [ $system_version -gt 9 ];then
+	if [ $system_version -gt 8 ];then
 		manager::repositories installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml.x86_64
 		manager::repositories remove kernel-tools-libs.x86_64 kernel-tools.x86_64
 		manager::repositories installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml-tools.x86_64
