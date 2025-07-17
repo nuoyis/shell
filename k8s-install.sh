@@ -17,11 +17,14 @@ system_version=`cat /etc/os-release | grep -oP '(?<=VERSION_ID=").*(?=")'`
 system_version=${system_version%.*}
 keepalived="$(hostname -I | awk '{print $1}' | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)\..*/\1/').199:16443"
 MIN_VERSION="1.23.0"
-MAX_VERSION="1.32.2"
+MAX_VERSION="1.33.3"
 k8sversion=$MAX_VERSION
 compare_versions() {
-    local version1=$(echo "$1" | awk -F. '{printf("%03d%03d%03d\n", $1, $2, $3)}')
-    local version2=$(echo "$2" | awk -F. '{printf("%03d%03d%03d\n", $1, $2, $3)}')
+    local ver1=$(echo "$1" | sed 's/^v//' | cut -d'-' -f1 | cut -d'+' -f1)
+    local ver2=$(echo "$2" | sed 's/^v//' | cut -d'-' -f1 | cut -d'+' -f1)
+
+    local version1=$(echo "$ver1" | awk -F. '{printf("%03d%03d%03d\n", $1, $2, $3)}')
+    local version2=$(echo "$ver2" | awk -F. '{printf("%03d%03d%03d\n", $1, $2, $3)}')
 
     if [ "$version1" -lt "$version2" ]; then
         echo -1
@@ -128,10 +131,10 @@ EOF
         cat > /etc/yum.repos.d/kubernetes.repo << EOF
 [kubernetes]
 name=Kubernetes
-baseurl=https://mirrors.aliyun.com/kubernetes-new/core/stable/v$k8sversion/rpm/
+baseurl=https://mirrors.aliyun.com/kubernetes-new/core/stable/v$(echo "$k8sversion" | cut -d'.' -f1,2)/rpm/
 enabled=1
 gpgcheck=1
-gpgkey=https://mirrors.aliyun.com/kubernetes-new/core/stable/v$k8sversion/rpm/repodata/repomd.xml.key
+gpgkey=https://mirrors.aliyun.com/kubernetes-new/core/stable/v$(echo "$k8sversion" | cut -d'.' -f1,2)/rpm/repodata/repomd.xml.key
 EOF
     fi
     yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
@@ -195,7 +198,7 @@ conf::kubernetes::join(){
 }
 
 conf::kubernetes::docker::init(){
-    kubeadm init --kubernetes-version=$k8sversion --apiserver-advertise-address=${mastersip[0]} --image-repository registry.aliyuncs.com/google_containers  --pod-network-cidr=10.223.0.0/16 --ignore-preflight-errors=SystemVerification
+    kubeadm init --kubernetes-version=$k8sversion --apiserver-advertise-address=${mastersip[0]} --image-repository registry.aliyuncs.com/google_containers  --pod-network-cidr=10.223.0.0/16 --ignore-preflight-errors=SystemVerification --ignore-preflight-errors=Mem
     conf::kubernetes::join
     wget https://docs.projectcalico.org/manifests/calico.yaml
     sed -i 's#docker.io/##g' calico.yaml
@@ -216,7 +219,6 @@ conf::kubernetes::containerd::init(){
                -e "\|^[[:space:]]*name: node|s|^|# |" \
                -e "s|imageRepository: registry.k8s.io|imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers|g" \
                -e "\|^kubernetesVersion:|a\controlPlaneEndpoint: $keepalived" kubeadm.yaml
-    fi
     cat > /etc/nginx/nginx.conf << EOF
 user nginx;
 worker_processes auto;
@@ -300,6 +302,7 @@ vrrp_instance VI_1 {
 }
 EOF
     systemctl enable --now keepalived
+    fi
     cat >> kubeadm.yaml << 'EOF'
 ---
 apiVersion: kubeproxy.config.k8s.io/v1alpha1
@@ -310,7 +313,7 @@ apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
 cgroupDriver: systemd
 EOF
-    kubeadm init --config=kubeadm.yaml --ignore-preflight-errors=SystemVerification
+    kubeadm init --config=kubeadm.yaml --ignore-preflight-errors=SystemVerification --ignore-preflight-errors=Mem
     conf::kubernetes::join
     wget -O calico.yaml https://alist.nuoyis.net/d/blog/kubernetes/calico.yaml
     sed -i -e '/# - name: CALICO_IPV4POOL_CIDR/{
@@ -558,7 +561,7 @@ else
     if [ $system_version -gt "7" ];then
         curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
         chmod +x /usr/bin/nuoyis-toolbox
-        nuoyis-toolbox -r edu -do -ku
+        nuoyis-toolbox -r aliyun -do -ku
     else
         install::yum
     fi
