@@ -460,20 +460,22 @@ install::init(){
             nodenumber=$(($nodenumber+1))
         done
     fi
-    nodenumber=1
-    for masterip in "${mastersip[@]}"; do
-        cat >> /etc/hosts << EOF
+    if [[ -n "${node_value}" ]]; then
+        nodenumber=1
+        for masterip in "${mastersip[@]}"; do
+            cat >> /etc/hosts << EOF
 $masterip kubernetes-master$nodenumber
 EOF
-        nodenumber=$(($nodenumber+1))
-    done
-    nodenumber=1
-    for nodeip in "${nodesip[@]}"; do
-        cat >> /etc/hosts << EOF
+            nodenumber=$(($nodenumber+1))
+        done
+        nodenumber=1
+        for nodeip in "${nodesip[@]}"; do
+            cat >> /etc/hosts << EOF
 $nodeip kubernetes-node$nodenumber
 EOF
-        nodenumber=$(($nodenumber+1))
-    done
+            nodenumber=$(($nodenumber+1))
+        done
+    fi
     systemctl enable chronyd --now
     cat >> /etc/chrony.conf << EOF
 server ntp1.aliyun.com iburst
@@ -553,11 +555,11 @@ else
             exit 1
         fi
     fi
-    if [ $system_version -gt "9" ];then
+    if [ $system_version -gt "7" ];then
         curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
         chmod +x /usr/bin/nuoyis-toolbox
-        nuoyis-toolbox -r aliyun -do -ku
-    elif [ $system_version == "7" ];then
+        nuoyis-toolbox -r edu -do -ku
+    else
         install::yum
     fi
     install::init
