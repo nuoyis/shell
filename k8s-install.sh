@@ -16,6 +16,7 @@ system_name=`head -n 1 /etc/os-release | grep -oP '(?<=NAME=").*(?=")' | awk '{p
 system_version=`cat /etc/os-release | grep -oP '(?<=VERSION_ID=").*(?=")'`
 system_version=${system_version%.*}
 keepalived="$(hostname -I | awk '{print $1}' | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)\..*/\1/').199:16443"
+is_first_master=false
 MIN_VERSION="1.23.0"
 MAX_VERSION="1.33.3"
 k8sversion=$MAX_VERSION
@@ -183,7 +184,7 @@ install::kernel(){
 
 conf::kubernetes::join(){
     if [ $device == "master" ];then
-        if [[ "$(hostname -I | awk '{print $1}')" != "${mastersip[0]}" ]]; then
+        if $is_first_master; then
             systemctl enable --now nginx
             source /kubernetes-master-join.sh
         fi
@@ -212,8 +213,7 @@ conf::kubernetes::containerd::init(){
            -e "/serviceSubnet: 10.96.0.0\\/12/i \\  podSubnet: 10.223.0.0/16" kubeadm.yaml
     if [ "${#mastersip[@]}" -eq 1 ]; then
         sed -i -e "s|  advertiseAddress: 1.2.3.4|  advertiseAddress: ${mastersip[0]}|g" \
-               -e "s|  name: node|  name: kubernetes-master|g" \
-               -e "/serviceSubnet: 10.96.0.0\\/12/i \\  podSubnet: 10.223.0.0/16" kubeadm.yaml
+               -e "s|  name: node|  name: kubernetes-master1|g" kubeadm.yaml
     else
         sed -i -e "\|^localAPIEndpoint:|,\|^  bindPort:|s|^|# |" \
                -e "\|^[[:space:]]*name: node|s|^|# |" \
@@ -341,7 +341,7 @@ c\
 }
 
 conf::kubernetes(){
-    if [ $device == "master" ] && [[ "$(hostname -I | awk '{print $1}')" == "${mastersip[0]}" ]]; then
+    if [[ "$device" == "master" && "$is_first_master" == true ]]; then
         if [ $(install::version $k8sversion) -eq 0 ]; then
             conf::kubernetes::docker::init
         else
@@ -451,26 +451,19 @@ install::init(){
     sed -i 's/.*swap.*/#&/' /etc/fstab
     sed -i '/^net.bridge.bridge-nf-call-ip6tables/d; /^net.bridge.bridge-nf-call-iptables/d; /^net.ipv4.ip_forward/d' /etc/sysctl.conf
     rm -rf /etc/sysctl.d/kubernetes.conf
-    if [[ $device == "master" && "$(hostname -I | awk '{print $1}')" == "${mastersip[0]}" ]];then
-        nodenumber=1
-        for masterip in "${mastersip[@]}"; do
-            sshpass -p $passwd ssh -o StrictHostKeyChecking=no root@$masterip "hostnamectl set-hostname kubernetes-master$nodenumber"
-            nodenumber=$(($nodenumber+1))
-        done
-        nodenumber=1
-        for nodeip in "${nodesip[@]}"; do
-            sshpass -p $passwd ssh -o StrictHostKeyChecking=no root@$nodeip "hostnamectl set-hostname kubernetes-node$nodenumber"
-            nodenumber=$(($nodenumber+1))
-        done
-    fi
     if [[ -n "${node_value}" ]]; then
-        nodenumber=1
-        for masterip in "${mastersip[@]}"; do
-            cat >> /etc/hosts << EOF
-$masterip kubernetes-master$nodenumber
-EOF
-            nodenumber=$(($nodenumber+1))
-        done
+        if [[ "$device" == "master" && "$is_first_master" == true ]]; then
+            nodenumber=1
+            for masterip in "${mastersip[@]}"; do
+                sshpass -p $passwd ssh -o StrictHostKeyChecking=no root@$masterip "hostnamectl set-hostname kubernetes-master$nodenumber"
+                nodenumber=$(($nodenumber+1))
+            done
+            nodenumber=1
+            for nodeip in "${nodesip[@]}"; do
+                sshpass -p $passwd ssh -o StrictHostKeyChecking=no root@$nodeip "hostnamectl set-hostname kubernetes-node$nodenumber"
+                nodenumber=$(($nodenumber+1))
+            done
+        fi
         nodenumber=1
         for nodeip in "${nodesip[@]}"; do
             cat >> /etc/hosts << EOF
@@ -479,6 +472,15 @@ EOF
             nodenumber=$(($nodenumber+1))
         done
     fi
+
+    nodenumber=1
+    for masterip in "${mastersip[@]}"; do
+        cat >> /etc/hosts << EOF
+$masterip kubernetes-master$nodenumber
+EOF
+        nodenumber=$(($nodenumber+1))
+    done
+    
     systemctl enable chronyd --now
     cat >> /etc/chrony.conf << EOF
 server ntp1.aliyun.com iburst
@@ -558,6 +560,12 @@ else
             exit 1
         fi
     fi
+    for ip in $(hostname -I); do
+        if [[ "$ip" == "${mastersip[0]}" ]]; then
+            is_first_master=true
+        break
+        fi
+    done
     if [ $system_version -gt "7" ];then
         curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
         chmod +x /usr/bin/nuoyis-toolbox

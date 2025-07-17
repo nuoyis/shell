@@ -155,3 +155,11 @@
    ```
    bash k8s-install.sh --master 192.168.20.36 --node 192.168.20.37 --password 1 --bashdevice master --version 1.23.1
    ```
+
+   单master不部署node(云服务器已测试)
+
+   ```
+   bash k8s-install.sh --master 192.168.20.36 --bashdevice master --version 1.33.3
+   ```
+
+   
