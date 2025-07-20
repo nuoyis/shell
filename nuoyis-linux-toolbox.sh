@@ -1546,34 +1546,6 @@ if [ -z $HOSTNAME_CHECK ];then
 	hostnamectl set-hostname $nuname-init-shell
 fi
 
-# 检查是否已有 swap 文件存在
-swap_file=$(swapon --show=NAME | grep -E '/nuoyis-toolbox-swap')
-
-if [ -n "$swap_file" ];then
-	echo "虚拟内存已存在"
-else
-    memory=`free -m | awk '/^Mem:/ {print $2}'`
-    if [ $memory -lt 1024 ] || [ $options_swap -eq 1 ];then
-        echo "设置虚拟内存"
-        if [ -z $options_swap_value ];then
-            swapsize=$[1024*2];
-        else
-            swapsize=$options_swap_value
-        fi
-            cat > /etc/sysctl.conf << EOF
-$(egrep -v '^vm.swappiness' /etc/sysctl.conf)
-EOF
-        echo "vm.swappiness=60" >> /etc/sysctl.conf
-        dd if=/dev/zero of=/nuoyis-toolbox-swap bs=1M count=$swapsize
-        chmod 0600 /nuoyis-toolbox-swap
-        mkswap -f /nuoyis-toolbox-swap
-        swapon /nuoyis-toolbox-swap
-        echo "/nuoyis-toolbox-swap    swap    swap    defaults    0 0" >> /etc/fstab
-        mount -a
-        sysctl -p
-    fi
-fi
-
 echo "创建临时安装文件夹nuoyis-install"
 mkdir -p /nuoyis-install
 
@@ -1791,6 +1763,34 @@ echo "检测是否是root用户"
 if [ $whois != "root" ];then
 	echo "非root用户，无法满足初始化需求"
 	exit 1
+fi
+
+# 检查是否已有 swap 文件存在
+swap_file=$(swapon --show=NAME | grep -E '/nuoyis-toolbox-swap')
+
+if [ -n "$swap_file" ];then
+	echo "虚拟内存已存在"
+else
+    memory=`free -m | awk '/^Mem:/ {print $2}'`
+    if [ $memory -lt 1024 ] || [ $options_swap -eq 1 ];then
+        echo "设置虚拟内存"
+        if [ -z $options_swap_value ];then
+            swapsize=$[1024*2];
+        else
+            swapsize=$options_swap_value
+        fi
+            cat > /etc/sysctl.conf << EOF
+$(egrep -v '^vm.swappiness' /etc/sysctl.conf)
+EOF
+        echo "vm.swappiness=60" >> /etc/sysctl.conf
+        dd if=/dev/zero of=/nuoyis-toolbox-swap bs=1M count=$swapsize
+        chmod 0600 /nuoyis-toolbox-swap
+        mkswap -f /nuoyis-toolbox-swap
+        swapon /nuoyis-toolbox-swap
+        echo "/nuoyis-toolbox-swap    swap    swap    defaults    0 0" >> /etc/fstab
+        mount -a
+        sysctl -p
+    fi
 fi
 
 # 下面开始依据变量值执行函数
