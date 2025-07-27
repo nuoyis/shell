@@ -1,0 +1,53 @@
+FormatVersion: OOS-2019-06-01
+Description: Create Epic Awesome Gamer container group in ECI
+Parameters: {}
+Tasks:
+  - Action: ACS::ExecuteApi
+    Name: ExecuteApi
+    Description: Create container group for epic-awesome-gamer
+    Properties:
+      Service: eci
+      API: CreateContainerGroup
+      Parameters:
+        RegionId: ap-northeast-1
+        ZoneId: 可用区((打开eci创建页面抄就完了, b区就是后面价格b，例子: ap-northeast-1b)
+        SecurityGroupId: 安全组id(打开eci创建页面抄就完了)
+        VSwitchId: 虚拟交换机(打开eci创建页面抄就完了)
+        ContainerGroupName: epic-awesome-gamer
+        RestartPolicy: Never
+        EipInstanceId: 弹性公网ip（手动申请按流量可以免200G）
+        Cpu: 4
+        Memory: 4
+        DnsPolicy: Default
+        AutoCreateEip: false
+        HostName: epic-awesome-gamer
+        Container:
+          - EnvironmentVar:
+              - Key: EPIC_EMAIL
+                Value: epic用户名
+              - Key: EPIC_PASSWORD
+                Value: epic密码
+              - Key: GEMINI_API_KEY
+                Value: 谷歌ai key
+            Tty: true
+            Arg:
+              - '-c'
+              - timeout 15m /usr/bin/tini -- xvfb-run --auto-servernum --server-num=1 --server-args='-screen 0, 1920x1080x24' uv run app/deploy.py
+            VolumeMount:
+              - MountPath: /app/app/volumes/
+                Name: epic-awesome-gamer
+            ImagePullPolicy: IfNotPresent
+            Command:
+              - /bin/bash
+            Memory: 4
+            Name: epic-awesome-gamer
+            Image: ghcr.io/qin2dim/epic-awesome-gamer:latest
+            Cpu: 4
+        Volume:
+          - Type: NFSVolume
+            DiskVolume.DiskSize: 1
+            NFSVolume.Path: /
+            NFSVolume.Server: 阿里云nas地址
+            Name: epic-awesome-gamer
+    Outputs: {}
+Outputs: {}
