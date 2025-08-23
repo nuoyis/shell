@@ -120,6 +120,7 @@ yum clean all && yum makecache && yum upgrade -y
 }
 
 install::kubernetes(){
+    echo $k8sversion
     if [ $(install::version $k8sversion) -eq 0 ]; then
         cat > /etc/yum.repos.d/kubernetes.repo << 'EOF'
 [kubernetes]
@@ -185,7 +186,10 @@ install::kernel(){
 conf::kubernetes::join(){
     if [ $device == "master" ];then
         if $is_first_master; then
-            systemctl enable --now nginx
+            if [ "${#mastersip[@]}" -gt 1 ]; then
+                systemctl enable --now nginx
+            fi
+        else
             source /kubernetes-master-join.sh
         fi
         mkdir -p $HOME/.kube
@@ -200,7 +204,6 @@ conf::kubernetes::join(){
 
 conf::kubernetes::docker::init(){
     kubeadm init --kubernetes-version=$k8sversion --apiserver-advertise-address=${mastersip[0]} --image-repository registry.aliyuncs.com/google_containers  --pod-network-cidr=10.223.0.0/16 --ignore-preflight-errors=SystemVerification --ignore-preflight-errors=Mem
-    conf::kubernetes::join
     wget https://docs.projectcalico.org/manifests/calico.yaml
     sed -i 's#docker.io/##g' calico.yaml
     kubectl apply -f calico.yaml
@@ -314,7 +317,6 @@ kind: KubeletConfiguration
 cgroupDriver: systemd
 EOF
     kubeadm init --config=kubeadm.yaml --ignore-preflight-errors=SystemVerification --ignore-preflight-errors=Mem
-    conf::kubernetes::join
     wget -O calico.yaml https://alist.nuoyis.net/d/blog/kubernetes/calico.yaml
     sed -i -e '/# - name: CALICO_IPV4POOL_CIDR/{
 N
@@ -353,9 +355,8 @@ conf::kubernetes(){
         else
             install::otherserver
         fi
-    else
-        conf::kubernetes::join
     fi
+    conf::kubernetes::join
     echo "source <(kubectl completion bash)" >> /etc/bashrc
     bash /etc/bashrc
 }
