@@ -1558,6 +1558,7 @@ echo "安装核心软件包"
 if [ $PM = "yum" ] || [ $PM = "dnf" ];then
 	manager::repositories install dnf-plugins-core python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils tar
 else
+	export DEBIAN_FRONTEND=noninteractive
 	manager::repositories install python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc g++ make unzip perl libipc-cmd-perl libtest-simple-perl pciutils tar ca-certificates curl gnupg ufw
 fi
 }
