@@ -73,52 +73,6 @@ install::version() {
     fi
 }
 
-install::yum(){
-rm -rf /etc/yum.repos.d/*
-curl -o /etc/yum.repos.d/epel.repo -L https://mirrors.aliyun.com/repo/epel-7.repo
-# curl -o /etc/yum.repos.d/CentOS-Base.repo -L https://mirrors.aliyun.com/repo/Centos-7.repo
-# sed -i "s|http://mirrors.aliyun.com/centos/\$releasever|https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009|g" /etc/yum.repos.d/CentOS-Base.repo
-cat > /etc/yum.repos.d/CentOS-Base.repo << 'EOF'
-[base]
-name=CentOS-$releasever - Base - mirrors.aliyun.com
-failovermethod=priority
-baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009/os/$basearch/
-gpgcheck=1
-gpgkey=http://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
-
-[updates]
-name=CentOS-$releasever - Updates - mirrors.aliyun.com
-failovermethod=priority
-baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009/updates/$basearch/
-gpgcheck=1
-gpgkey=http://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
-
-[extras]
-name=CentOS-$releasever - Extras - mirrors.aliyun.com
-failovermethod=priority
-baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009/extras/$basearch/
-gpgcheck=1
-gpgkey=http://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
-
-[centosplus]
-name=CentOS-$releasever - Plus - mirrors.aliyun.com
-failovermethod=priority
-baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009/centosplus/$basearch/
-gpgcheck=1
-enabled=0
-gpgkey=http://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
-
-[contrib]
-name=CentOS-$releasever - Contrib - mirrors.aliyun.com
-failovermethod=priority
-baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009/contrib/$basearch/
-gpgcheck=1
-enabled=0
-gpgkey=http://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
-EOF
-yum clean all && yum makecache && yum upgrade -y
-}
-
 install::kubernetes(){
     echo $k8sversion
     if [ $(install::version $k8sversion) -eq 0 ]; then
@@ -139,14 +93,6 @@ gpgcheck=1
 gpgkey=https://mirrors.aliyun.com/kubernetes-new/core/stable/v$(echo "$k8sversion" | cut -d'.' -f1,2)/rpm/repodata/repomd.xml.key
 EOF
     fi
-    yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
-    sed -i 's+download.docker.com+mirrors.aliyun.com/docker-ce+' /etc/yum.repos.d/docker-ce.repo
-    yum install docker-ce docker-ce-cli docker-compose-plugin containerd.io* -y
-    if [ -f "/usr/bin/docker-compose" ];then
-		echo "docker-compose 二进制文件已存在"
-	else
-		curl -kL "https://alist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/docker-compose/docker-compose-linux-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
-	fi
     systemctl enable --now docker
     systemctl enable --now containerd
     cat > /etc/docker/daemon.json << EOF
@@ -185,11 +131,7 @@ install::kernel(){
 
 conf::kubernetes::join(){
     if [ $device == "master" ];then
-        if $is_first_master; then
-            if [ "${#mastersip[@]}" -gt 1 ]; then
-                systemctl enable --now nginx
-            fi
-        else
+        if ! $is_first_master; then
             source /kubernetes-master-join.sh
         fi
         mkdir -p $HOME/.kube
@@ -197,6 +139,12 @@ conf::kubernetes::join(){
         chown $(id -u):$(id -g) $HOME/.kube/config
         export KUBECONFIG=/etc/kubernetes/admin.conf
         echo "KUBECONFIG=/etc/kubernetes/admin.conf" >>/etc/bashrc
+        if $is_first_master; then
+            if [ "${#mastersip[@]}" -gt 1 ]; then
+                systemctl enable --now nginx
+            fi
+            kubectl apply -f calico.yaml
+        fi
     else
         source /kubernetes-node-join.sh
     fi
@@ -206,7 +154,6 @@ conf::kubernetes::docker::init(){
     kubeadm init --kubernetes-version=$k8sversion --apiserver-advertise-address=${mastersip[0]} --image-repository registry.aliyuncs.com/google_containers  --pod-network-cidr=10.223.0.0/16 --ignore-preflight-errors=SystemVerification --ignore-preflight-errors=Mem
     wget https://docs.projectcalico.org/manifests/calico.yaml
     sed -i 's#docker.io/##g' calico.yaml
-    kubectl apply -f calico.yaml
 }
 
 conf::kubernetes::containerd::init(){
@@ -328,7 +275,6 @@ c\
               value: "interface='"$networkname"'"
 }' \
 -e 's|docker.io|docker.m.daocloud.io|g' calico.yaml
-    kubectl apply -f calico.yaml
     for masterip in "${mastersip[@]:1}"; do
         sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$masterip "mkdir -p /etc/kubernetes/pki/etcd && mkdir -p /root/.kube/"
         sshpass -p "$passwd" scp -o StrictHostKeyChecking=no /etc/kubernetes/pki/ca.crt root@$masterip:/etc/kubernetes/pki/
@@ -567,13 +513,9 @@ else
         break
         fi
     done
-    if [ $system_version -gt "7" ];then
-        curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
-        chmod +x /usr/bin/nuoyis-toolbox
-        nuoyis-toolbox -r aliyun -do -ku
-    else
-        install::yum
-    fi
+    curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
+    chmod +x /usr/bin/nuoyis-toolbox
+    nuoyis-toolbox -r aliyun -do
     install::init
     install::kubernetes
     if [ $system_version == "7" ];then
