@@ -17,9 +17,9 @@ system_version=`cat /etc/os-release | grep -oP '(?<=VERSION_ID=").*(?=")'`
 system_version=${system_version%.*}
 keepalived="$(hostname -I | awk '{print $1}' | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)\..*/\1/').199:16443"
 is_first_master=false
-MIN_VERSION="1.23.0"
-MAX_VERSION="1.33.3"
-k8sversion=$MAX_VERSION
+MIN_VERSION="1.19.0"
+MAX_VERSION=$(curl -s "http://lnmp-versions.nuoyis.net/versions.json" | grep -o '"kubernetes"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*: *"//;s/"$//');
+k8sversion=${MAX_VERSION:-"1.34.0"}
 compare_versions() {
     local ver1=$(echo "$1" | sed 's/^v//' | cut -d'-' -f1 | cut -d'+' -f1)
     local ver2=$(echo "$2" | sed 's/^v//' | cut -d'-' -f1 | cut -d'+' -f1)
@@ -74,7 +74,6 @@ install::version() {
 }
 
 install::kubernetes(){
-    echo $k8sversion
     if [ $(install::version $k8sversion) -eq 0 ]; then
         cat > /etc/yum.repos.d/kubernetes.repo << 'EOF'
 [kubernetes]
@@ -152,7 +151,16 @@ conf::kubernetes::join(){
 
 conf::kubernetes::docker::init(){
     kubeadm init --kubernetes-version=$k8sversion --apiserver-advertise-address=${mastersip[0]} --image-repository registry.aliyuncs.com/google_containers  --pod-network-cidr=10.223.0.0/16 --ignore-preflight-errors=SystemVerification --ignore-preflight-errors=Mem
-    wget https://docs.projectcalico.org/manifests/calico.yaml
+    KUBE_MINOR=$(echo "$k8sversion" | awk -F. '{print $2}')
+
+    if [ "$KUBE_MINOR" -lt 21 ]; then
+        echo "Kubernetes $k8sversion (<1.21)，部署 Calico v3.19（policy/v1beta1）"
+        CALICO_URL="https://docs.projectcalico.org/archive/v3.19/manifests/calico.yaml"
+    else
+        echo "Kubernetes $k8sversion (>=1.21)，部署最新 Calico（policy/v1）"
+        CALICO_URL="https://docs.projectcalico.org/manifests/calico.yaml"
+    fi
+    wget $CALICO_URL
     sed -i 's#docker.io/##g' calico.yaml
 }
 
@@ -295,10 +303,7 @@ conf::kubernetes(){
         else
             conf::kubernetes::containerd::init
         fi
-        if [[ -z "${node_value}" ]]; then
-            echo "--node option is required, exit."
-            exit 0
-        else
+        if [[ -n "${node_value}" ]]; then
             install::otherserver
         fi
     fi
