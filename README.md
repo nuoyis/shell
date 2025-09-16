@@ -13,16 +13,24 @@
   ```
 2. Linux toolbox
 
-     一个linux工具箱(从初始化脚本独立出来的)  
+   一个linux工具箱(从初始化脚本独立出来的)  
 
-     安装方法
+   安装方法1
 
-     ```
+   ```
    curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
    chmod +x /usr/bin/nuoyis-toolbox
-     ```
+   ```
 
-    部分使用案例(设置全局自定义名，设置主机名，使用阿里源，安装lnmp版本docker，安装docker常用的app, 更新最新内核并自动更新，调优)
+   安装方法2
+
+   ``` 
+   bash <(curl -sSLk https://shell.nuoyis.net/nuoyis-linux-toolbox.sh) --install
+   ```
+
+   
+
+   部分使用案例(设置全局自定义名，设置主机名，使用阿里源，安装lnmp版本docker，安装docker常用的app, 更新最新内核并自动更新，调优)
 
      ```
    nuoyis-toolbox -n nuoyis -host nuoyis -r aliyun -ln docker -doa -ku -tu
@@ -37,22 +45,26 @@
    use: /usr/bin/nuoyis-toolbox [command]...
    
    command:
+     --install            install nuoyis toolbox and autoupdate
+     --remove             remove nuoyis toolbox and autoupdate
      -ln, --lnmp          install nuoyis version lnmp. Options: gcc docker yum
      -do, --dockerinstall install docker
      -doa, --dockerapp    install docker app (qinglong and openlist ...)
      -na, --nas           install vsftpd nginx and nfs
      -oll, --ollama       install ollama
-     -bt, --btpanelenable install bt panel
+     -bt, --btpanel       install bt panel
      -ku, --kernelupdate  install use elrepo to update kernel
      -n, --name           config yum name and folder name
      -host,--hostname     config default is options_toolbox_init,so you have use this options before install
      -r,  --mirror        config yum mirrors update,if you not used, it will not be executed. Options: edu aliyun original other
      -tu, --tuning	       config linux system tuning
      -sw, --swap          config Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
-     -mp, --mysqlpassword config nuoyis-lnmp-np password set  
+     -mp, --mariadbpassword config lnmp-mariadb password set  
      -h,  --help          show shell help
      -sha, --sha256sum    show shell's sha256sum
-     exam: nuoyis-toolbox -n nuoyis -host nuoyis-us-1 -r original -ln docker -ku -tu -mp 123456
+     exam1:           nuoyis-toolbox -n nuoyis -host nuoyis-shanghai-1 -r aliyun -ln docker -tu -mp 123456 -na
+     exam2(overseas): nuoyis-toolbox -n nuoyis -host nuoyis-us-1 -r original -ln docker -tu -mp 123456 -na
+     exam3(btpanel):  nuoyis-toolbox -n nuoyis -host nuoyis-us-1 -r aliyun -bt
    ```
 
    帮助菜单参考(中文版)
@@ -64,6 +76,8 @@
    使用方法：/usr/bin/nuoyis-toolbox [命令]...
    
    命令：
+   --install              安装 nuoyis-linux-toolbox 到 /usr/bin/toolbox 以及自动更新脚本(可在crontab内删除)
+   --remove               卸载 nuoyis-linux-toolbox
    -ln, --lnmp            安装 nuoyis lnmp 版本。选项：gcc docker yum
    -do, --dockerinstall   安装 docker
    -doa, --dockerapp      安装 docker app（qinglong 和 openlist ...）

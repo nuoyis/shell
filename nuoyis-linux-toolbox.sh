@@ -2,7 +2,7 @@
 # Script Name    : nuoyis toolbox
 # Description    : Linux quick initialization and installation
 # Create Date    : 2025-04-23
-# Update Date    : 2025-07-14
+# Update Date    : 2025-09-16
 # auth           : nuoyis
 # Webside        : blog.nuoyis.net
 # debug          : bash nuoyis-toolbox -host aliyun -r edu -ln docker -doa -na -mp test666 -ku -tu
