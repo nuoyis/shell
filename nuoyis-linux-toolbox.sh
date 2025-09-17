@@ -974,7 +974,7 @@ install::lnmp(){
 }
 
 conf::reposource::yum(){
-	if [ $system_version -gt 7 ];then
+	if [ $system_version -ge 8 ]; then
 		if [[ "$options_yum_install" == "edu" ]];then
 			yumurl="mirrors.cernet.edu.cn"
 			if [[ $system_name == "Rocky" ]]; then
@@ -1175,7 +1175,7 @@ EOF
 
 conf::reposource::yum_additional_source(){
 	echo "正在配置附加源"
-	if [ $system_version -gt 7 ];then
+	if [ $system_version -ge 8 ]; then
 		manager::repositories install https://mirrors.aliyun.com/epel/epel-release-latest-$system_version.noarch.rpm
 		if [ $system_version -lt 10 ]; then
 			rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
@@ -1273,7 +1273,7 @@ conf::reposource::redhat(){
 }
 
 conf::reposource(){
-reponum=`$PM list | wc -l`
+# reponum=`$PM list | wc -l`
 
 # if [ $reponum -lt 1000 ];then
 if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
@@ -1290,53 +1290,56 @@ if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
 		source main.sh
 		echo "yes"
 	else
-	manager::repositories installcheck epel
-	if [ $? -eq 0 ];then
-		manager::repositories remove epel-release epel-next-release
-	fi
+		manager::repositories installcheck epel
+		if [ $? -eq 0 ];then
+			manager::repositories remove epel-release epel-next-release
+		fi
 
-	manager::repositories installcheck remi
-	if [ $? -eq 0 ];then
-		manager::repositories remove remi-release.remi.noarch
-	fi
+		manager::repositories installcheck remi
+		if [ $? -eq 0 ];then
+			manager::repositories remove remi-release.remi.noarch
+		fi
 
-	manager::repositories installcheck elrepo
-	if [ $? -eq 0 ];then
-		manager::repositories remove elrepo-release.noarch
-	fi
-		if [ $system_name != "openEuler" ];then
-			echo "正在检查是否存在冲突/模块缺失"
-			echo "正在检查模块依赖问题..."
-			options_install_check_modules_bug=$($PM check 2>&1)
-			if [ -z "$options_install_check_modules_bug" ]; then
-				echo "没有发现模块依赖问题,继续下一步"
-			else
-				echo "发现模块依赖问题："
-				# 提取并禁用冲突的模块
-				echo "正在禁用冲突模块"
-				while read -r module; do
-					# 提取模块名和版本
-					module_name=$(echo $module | grep -oP '(?<=module )[^:]+:[^ ]+' | sed 's/:[^:]*$//')
-					if [ -n "$module_name" ]; then
-						echo "禁用模块: $module_name"
-						sudo yum module disable "$module_name" -y
-						if [ $? -eq 0 ]; then
-							echo "模块 $module_name 禁用成功"
-						else
-							echo "模块 $module_name 禁用失败"
+		manager::repositories installcheck elrepo
+		if [ $? -eq 0 ];then
+			manager::repositories remove elrepo-release.noarch
+		fi
+		if [ $system_name == "openEuler" ];then
+			sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
+		else
+			if [ $system_name == "Rocky" ];then
+				echo "正在检查是否存在冲突/模块缺失"
+				echo "正在检查模块依赖问题..."
+				options_install_check_modules_bug=$($PM check 2>&1)
+				if [ -z "$options_install_check_modules_bug" ]; then
+					echo "没有发现模块依赖问题,继续下一步"
+				else
+					echo "发现模块依赖问题："
+					# 提取并禁用冲突的模块
+					echo "正在禁用冲突模块"
+					while read -r module; do
+						# 提取模块名和版本
+						module_name=$(echo $module | grep -oP '(?<=module )[^:]+:[^ ]+' | sed 's/:[^:]*$//')
+						if [ -n "$module_name" ]; then
+							echo "禁用模块: $module_name"
+							sudo yum module disable "$module_name" -y
+							if [ $? -eq 0 ]; then
+								echo "模块 $module_name 禁用成功"
+							else
+								echo "模块 $module_name 禁用失败"
+							fi
 						fi
-					fi
-				done <<< "$options_install_check_modules_bug"
-				echo "模块依赖修复和冲突模块禁用完成。"
+					done <<< "$options_install_check_modules_bug"
+					echo "模块依赖修复和冲突模块禁用完成。"
+				fi
 			fi
 			conf::reposource::yum
-		else
-			sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
 		fi
+		
 	fi
-	elif [ $PM = "apt" ];then
+elif [ $PM = "apt" ];then
 		conf::reposource::deb
-	fi
+fi
 
 	# 红帽系统特调
 	if [ $system_name == "Red" ];then
