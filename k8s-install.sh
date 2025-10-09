@@ -338,10 +338,12 @@ for nodeip in "${all_ips[@]}"; do
     kernel_version=$(sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no "root@$nodeip" "uname -r | cut -d- -f1")
     echo "当前部署节点 $nodenumber IP: $nodeip 当前内核版本: $kernel_version"
 
-    if printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$kernel_version" | sort -V -C; then
-        echo "内核版本满足要求，开始安装"
-    else
-        echo "内核版本过低，开始升级并重启"
+    if [ $(install::version $k8sversion) -eq 1 ]; then
+        if printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$kernel_version" | sort -V -C; then
+            echo "内核版本满足要求，开始安装"
+        else
+            echo "内核版本过低，开始升级并重启"
+        fi
     fi
     sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "bash /k8s-install.sh --master $master_value --node $node_value --password $passwd --bashdevice $( $is_master && echo master || echo node ) --version $k8sversion"  
     if $is_master; then
@@ -377,17 +379,18 @@ EOF"
         sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "systemctl enable --now keepalived"
         vipid=$(($vipid-10))
     fi
-    if ! printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$kernel_version" | sort -V -C; then
-        echo "等待 $nodeip 重启..."
-        sleep 70
-        while ! ping -c 1 -W 1 "$nodeip" >/dev/null 2>&1; do
-            echo "等待 $nodeip 开机中..."
-            sleep 3
-        done
-        echo "重新执行安装脚本"
-        sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "bash /k8s-install.sh --master $master_value --node $node_value --password $passwd --bashdevice $( $is_master && echo master || echo node ) --version $k8sversion"
+    if [ $(install::version $k8sversion) -eq 1 ]; then
+        if ! printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$kernel_version" | sort -V -C; then
+            echo "等待 $nodeip 重启..."
+            sleep 70
+            while ! ping -c 1 -W 1 "$nodeip" >/dev/null 2>&1; do
+                echo "等待 $nodeip 开机中..."
+                sleep 3
+            done
+            echo "重新执行安装脚本"
+            sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "bash /k8s-install.sh --master $master_value --node $node_value --password $passwd --bashdevice $( $is_master && echo master || echo node ) --version $k8sversion"
+        fi
     fi
-
     nodenumber=$((nodenumber + 1))
 done
 }
@@ -522,17 +525,24 @@ else
     chmod +x /usr/bin/nuoyis-toolbox
     nuoyis-toolbox -r aliyun -do
     install::init
+    if [ $(install::version $k8sversion) -eq 0 ]; then
+        # 删除toolbox内下载的最新版本
+        yum remove -y docker-ce docker-ce-cli docker-ce-rootless-extras docker-buildx-plugin docker-compose-plugin -y
+        yum install docker-ce-19.03.15 docker-ce-cli-19.03.15 -y
+    fi
     install::kubernetes
-    if [ $system_version == "7" ];then
-        echo "当前内核版本: $current_kernel"
-        echo "Kubernetes 要求最低版本: $MIN_KERNEL_VERSION"
-        if printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$current_kernel" | sort -V -C; then
-            echo "当前内核版本满足 Kubernetes 要求,正在安装kubernetes"
-        else
-            echo "当前内核版本低于 Kubernetes 要求,需升级内核后重启"
-            echo "正在升级内核，会自动重启"
-            install::kernel
-            exit 0
+    if [ $(install::version $k8sversion) -eq 1 ]; then
+        if [ $system_version == "7" ];then
+            echo "当前内核版本: $current_kernel"
+            echo "Kubernetes 要求最低版本: $MIN_KERNEL_VERSION"
+            if printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$current_kernel" | sort -V -C; then
+                echo "当前内核版本满足 Kubernetes 要求,正在安装kubernetes"
+            else
+                echo "当前内核版本低于 Kubernetes 要求,需升级内核后重启"
+                echo "正在升级内核，会自动重启"
+                install::kernel
+                exit 0
+            fi
         fi
     fi
     conf::kubernetes

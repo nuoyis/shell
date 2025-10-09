@@ -7,14 +7,13 @@
 # Webside        : blog.nuoyis.net
 # debug          : bash nuoyis-toolbox -host aliyun -r edu -ln docker -doa -na -mp test666 -ku -tu
 
-# 变量设置
+#### 手动变量定义区域 ####
+# 环境变量设置
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
 # 语言设置
 LANG=en_US.UTF-8
-#变量定义区域
-
-#变量初始化区域
+# 变量初始化区域
 nuname="nuoyis"
 options_yum=0
 options_lnmp=0
@@ -26,46 +25,32 @@ options_docker_app=0
 options_nas=0
 options_ollama=0
 options_bt=0
-# CIDR="10.104.43"
-# gateway="10.104.0.1"
-# dns="223.5.5.5"
 
-#自动获取变量区域
+#### 自动获取变量区域 ####
+# 脚本执行时间统计
 startTime=`date +%Y%m%d-%H:%M:%S`
 startTime_s=`date +%s`
+# 登陆用户判断
 whois=$(whoami)
 # nuo_setnetwork_shell=$(ip a | grep -E '^[0-9]+: ' | grep -v lo | awk '{print $2}' | sed 's/://')
+# 网卡获取
 nuo_setnetwork_shell=$(ip a | grep -oE "inet ([0-9]{1,3}.){3}[0-9]{1,3}" | awk 'NR==2 {print $2}')
+# 系统名称类型获取
 system_name=`head -n 1 /etc/os-release | grep -oP '(?<=NAME=").*(?=")' | awk '{print$1}'`
 system_version=`cat /etc/os-release | grep -oP '(?<=VERSION_ID=").*(?=")'`
 system_version=${system_version%.*}
-
-# 用户终止脚本判断
-exit::backoff() {
-    case $exit_type in
-        SIGINT)
-            echo "用户执行Ctrl+C"
-            ;;
-        SIGTERM)
-            echo "进程被杀死"
-            ;;
-        SIGHUP)
-            echo "终端连接异常"
-            ;;
-        *)
-            echo "未知信号"
-            ;;
-    esac
-	echo "正在清理残余文件并退出脚本"
-	rm -rf /nuoyis-install
-	rm -rf /root/.toolbox-install-init.lock
-	exit 1
-}
-
-trap 'exit_type=SIGINT; exit::backoff' SIGINT
-trap 'exit_type=SIGTERM; exit::backoff' SIGTERM
-trap 'exit_type=SIGHUP; exit::backoff' SIGHUP
-
+# 脚本初始化锁
+if [[ ! -f /root/.toolbox-install-init.lock ]]; then
+	installlock=0
+else
+	installlock=1
+fi
+# vsftpd配置
+if [ $system_name == "Debian" ] || [ $system_name == "Ubuntu" ];then
+	vsftpdfile="/etc/vsftpd.conf"
+else
+	vsftpdfile="/etc/vsftpd/vsftpd.conf"
+fi
 # 检测包管理器
 if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
 	if [ $system_version -lt 8 ]; then
@@ -98,7 +83,46 @@ if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
 	fi
 elif command -v apt-get > /dev/null 2>&1 && command -v dpkg > /dev/null 2>&1; then
     PM="apt"
+	export DEBIAN_FRONTEND=noninteractive
+	export UCF_FORCE_CONFFNEW=1
+	export NEEDRESTART_MODE=a
+	export APT_LISTCHANGES_FRONTEND=none
+	sed -i 's/#\$nrconf{restart} = .*/$nrconf{restart} = "a";/' /etc/needrestart/needrestart.conf
 fi
+# 时间同步配置文件位置判断
+if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+	chronyconf=/etc/chrony.conf
+else
+	chronyconf=/etc/chrony/chrony.conf
+fi
+
+#### 函数区域 ####
+
+# 用户终止脚本判断
+exit::backoff() {
+    case $exit_type in
+        SIGINT)
+            echo "用户执行Ctrl+C"
+            ;;
+        SIGTERM)
+            echo "进程被杀死"
+            ;;
+        SIGHUP)
+            echo "终端连接异常"
+            ;;
+        *)
+            echo "未知信号"
+            ;;
+    esac
+	echo "正在清理残余文件并退出脚本"
+	rm -rf /nuoyis-install
+	rm -rf /root/.toolbox-install-init.lock
+	exit 1
+}
+
+trap 'exit_type=SIGINT; exit::backoff' SIGINT
+trap 'exit_type=SIGTERM; exit::backoff' SIGTERM
+trap 'exit_type=SIGHUP; exit::backoff' SIGHUP
 
 manager::download(){
 	if [ -f /usr/bin/wget ];then
@@ -276,13 +300,13 @@ install::nas(){
     # 额外配置
     manager::repositories install vsftpd samba
 
-	if [ $system_name == "Debian" ];then
-		vsftpdfile="/etc/vsftpd.conf"
-	else
-		vsftpdfile="/etc/vsftpd/vsftpd.conf"
+	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
     	firewall-cmd --per --add-service=samba
     	firewall-cmd --per --add-service=ftp
     	firewall-cmd --reload
+	else
+		ufw allow samba
+		ufw allow ftp
 	fi
     cat > $vsftpdfile << EOF
 # 不以独立模式运行
@@ -484,7 +508,12 @@ EOF
 		docker restart lnmp-np
 	fi
 fi
-manager::systemctl start vsftpd smb nmb
+
+if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+	manager::systemctl start vsftpd smb nmb
+else
+	manager::systemctl start vsftpd smbd nmbd
+fi
 
 echo "You can visit the page http(s)://url/nuoyisnb"
 echo "If you bring other parameters, You have 10 seconds to visit message."
@@ -506,7 +535,7 @@ install::docker(){
 		install -m 0755 -d /etc/apt/keyrings
 		curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 		chmod a+r /etc/apt/keyrings/docker.gpg
-		echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.cernet.edu.cn/docker-ce/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+		echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.cernet.edu.cn/docker-ce/linux/${system_name,,} $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
 		manager::repositories update
 	fi
 	manager::repositories install docker-ce docker-ce-cli containerd.io docker-compose-plugin
@@ -1219,16 +1248,16 @@ conf::reposource::deb(){
         apt_url="mirrors.aliyun.com"
     fi
 	rm -rf /etc/apt/sources.list.d/*
-	if [ -f /etc/debian_version ]; then
+	if [ $system_name == "Debian" ]; then
         sed -i "s/http:\/\/deb.debian.org/https:\/\/$apt_url/g" /etc/apt/sources.list
         sed -i "s/http:\/\/security.debian.org/https:\/\/$apt_url/g" /etc/apt/sources.list
 		wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
 		manager::repositories install apt-transport-https
 		echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
-    elif [ -f /etc/lsb-release ]; then
+    else
         sed -i "s/http:\/\/archive.ubuntu.com/https:\/\/$apt_url/g" /etc/apt/sources.list
         sed -i "s/http:\/\/security.ubuntu.com/https:\/\/$apt_url/g" /etc/apt/sources.list
-		add-apt-repository ppa:ondrej/php
+		yes | add-apt-repository ppa:ondrej/php
 	fi
 }
 
@@ -1345,19 +1374,14 @@ fi
 	if [ $system_name == "Red" ];then
 		conf::reposource::redhat
 	fi
-
-	echo "正在安装时间同步软件，以及检查时间并同步，防止yum报错"
-	if [ -f /etc/redhat-release ]; then
-    	yum --setopt=sslverify=0 -y install chrony
-	elif [ -f /etc/debian_version ]; then
-    	apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false update -y
-    	apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false install -y chrony
-	fi
-
-	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
-		chronyconf=/etc/chrony.conf
-	else
-		chronyconf=/etc/chrony/chrony.conf
+	if [[ ! -f /root/.toolbox-install-init.lock ]]; then
+		echo "正在安装时间同步软件，以及检查时间并同步，防止yum报错"
+		if [ -f /etc/redhat-release ]; then
+    		yum --setopt=sslverify=0 -y install chrony
+		elif [ -f /etc/debian_version ]; then
+    		apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false update -y
+    		apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false install -y chrony
+		fi
 	fi
 	cat > "$chronyconf" << EOF
 server ntp.aliyun.com iburst
@@ -1372,22 +1396,23 @@ logdir /var/log/chrony
 driftfile /var/lib/chrony/chrony.drift
 makestep 1.0 3
 EOF
-	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
-		systemctl enable --now chronyd 2>/dev/null
-		systemctl restart chronyd 2>/dev/null
-		crontab -l 2>/dev/null | sed '/chronyd/d' | crontab -
-		(crontab -l 2>/dev/null; echo "0 1 * * * systemctl restart chronyd") | crontab -
-	else
-		systemctl enable --now chrony 2>/dev/null
-		systemctl restart chrony 2>/dev/null
-		crontab -l 2>/dev/null | sed '/chrony/d' | crontab -
-		(crontab -l 2>/dev/null; echo "0 1 * * * systemctl restart chrony") | crontab -
+	if [[ $installlock -eq 0 ]]; then
+		if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+			systemctl enable --now chronyd 2>/dev/null
+			systemctl restart chronyd 2>/dev/null
+			crontab -l 2>/dev/null | sed '/chronyd/d' | crontab -
+			(crontab -l 2>/dev/null; echo "0 1 * * * systemctl restart chronyd") | crontab -
+		else
+			systemctl enable --now chrony 2>/dev/null
+			systemctl restart chrony 2>/dev/null
+			crontab -l 2>/dev/null | sed '/chrony/d' | crontab -
+			(crontab -l 2>/dev/null; echo "0 1 * * * systemctl restart chrony") | crontab -
+		fi
+
+		echo "等待 10 秒让时间生效..."
+		sleep 10
 	fi
-
-	echo "等待 10 秒让时间生效..."
-	sleep 10
-
-	# 设置好时间同步后配置附加源
+	# 配置附加源(重复执行重新配置)
 	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
 		conf::reposource::yum_additional_source
 	fi
@@ -1829,7 +1854,7 @@ if [[ $options_yum -eq 1 ]]; then
   conf::reposource
 fi
 
-if [[ ! -f /root/.toolbox-install-init.lock ]]; then
+if [[ $installlock -eq 0 ]]; then
 	touch /root/.toolbox-install-init.lock
 	install::main
 fi
