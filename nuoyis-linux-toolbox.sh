@@ -87,7 +87,11 @@ elif command -v apt-get > /dev/null 2>&1 && command -v dpkg > /dev/null 2>&1; th
 	export UCF_FORCE_CONFFNEW=1
 	export NEEDRESTART_MODE=a
 	export APT_LISTCHANGES_FRONTEND=none
-	sed -i 's/#\$nrconf{restart} = .*/$nrconf{restart} = "a";/' /etc/needrestart/needrestart.conf
+	if [[ $installlock -eq 0 ]]; then
+		if [ -f /etc/needrestart/needrestart.conf ]; then
+			sed -i 's/#\$nrconf{restart} = .*/$nrconf{restart} = "a";/' /etc/needrestart/needrestart.conf
+		fi
+	fi
 fi
 # 时间同步配置文件位置判断
 if [ $PM = "yum" ] || [ $PM = "dnf" ];then
@@ -533,7 +537,7 @@ install::docker(){
 		manager::repositories makecache
 	else
 		install -m 0755 -d /etc/apt/keyrings
-		curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+		curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/${system_name,,}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 		chmod a+r /etc/apt/keyrings/docker.gpg
 		echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.cernet.edu.cn/docker-ce/linux/${system_name,,} $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
 		manager::repositories update
@@ -1247,17 +1251,26 @@ conf::reposource::deb(){
     elif [ "$options_yum_install" == "aliyun" ]; then
         apt_url="mirrors.aliyun.com"
     fi
+	echo "" > /etc/apt/sources.list
 	rm -rf /etc/apt/sources.list.d/*
 	if [ $system_name == "Debian" ]; then
-        sed -i "s/http:\/\/deb.debian.org/https:\/\/$apt_url/g" /etc/apt/sources.list
-        sed -i "s/http:\/\/security.debian.org/https:\/\/$apt_url/g" /etc/apt/sources.list
-		wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+		cat > /etc/apt/sources.list.d/mirror.list << EOF
+deb https://mirrors.tuna.tsinghua.edu.cn/debian/ $(lsb_release -sc) main contrib non-free non-free-firmware
+deb https://mirrors.tuna.tsinghua.edu.cn/debian/ $(lsb_release -sc)-updates main contrib non-free non-free-firmware
+deb https://mirrors.tuna.tsinghua.edu.cn/debian/ $(lsb_release -sc)-backports main contrib non-free non-free-firmware
+deb https://security.debian.org/debian-security $(lsb_release -sc)-security main contrib non-free non-free-firmware
+EOF
+       	wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
 		manager::repositories install apt-transport-https
 		echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
     else
-        sed -i "s/http:\/\/archive.ubuntu.com/https:\/\/$apt_url/g" /etc/apt/sources.list
-        sed -i "s/http:\/\/security.ubuntu.com/https:\/\/$apt_url/g" /etc/apt/sources.list
-		yes | add-apt-repository ppa:ondrej/php
+		cat > /etc/apt/sources.list.d/mirror.list << EOF
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ $(lsb_release -sc) main restricted universe multiverse
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ $(lsb_release -sc)-updates main restricted universe multiverse
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ $(lsb_release -sc)-backports main restricted universe multiverse
+deb http://security.ubuntu.com/ubuntu/ $(lsb_release -sc)-security main restricted universe multiverse
+EOF
+      	yes | add-apt-repository ppa:ondrej/php
 	fi
 }
 
