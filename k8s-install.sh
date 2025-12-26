@@ -106,7 +106,7 @@ EOF
 }
 EOF
     containerd config default > /etc/containerd/config.toml
-    sed -i -e '/.*sandbox_image/c\    sandbox_image = "registry.aliyuncs.com\/google_containers\/pause:3.9"' \
+    sed -i -e "s|registry.k8s.io/pause|registry.aliyuncs.com/google_containers/pause|g" \
            -e "s|SystemdCgroup = false|SystemdCgroup = true|g" /etc/containerd/config.toml
     systemctl daemon-reload
     systemctl restart docker
