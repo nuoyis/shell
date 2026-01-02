@@ -74,6 +74,7 @@ install::version() {
 }
 
 install::kubernetes(){
+    touch /etc/yum.repos.d/kubernetes.repo
     if [ $(install::version $k8sversion) -eq 0 ]; then
         cat > /etc/yum.repos.d/kubernetes.repo << 'EOF'
 [kubernetes]
@@ -116,9 +117,9 @@ EOF
 }
 
 install::kernel(){
-    wget https://alist.nuoyis.net/d/blog/kubernetes/kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
-    wget https://alist.nuoyis.net/d/blog/kubernetes/kernel-lt-headers-5.4.226-1.el7.elrepo.x86_64.rpm
-    wget https://alist.nuoyis.net/d/blog/kubernetes/kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
+    wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
+    wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-headers-5.4.226-1.el7.elrepo.x86_64.rpm
+    wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
     rpm -ivh kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
     rpm -ivh kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
     yum remove kernel-headers -y
@@ -272,7 +273,7 @@ kind: KubeletConfiguration
 cgroupDriver: systemd
 EOF
     kubeadm init --config=kubeadm.yaml --ignore-preflight-errors=SystemVerification --ignore-preflight-errors=Mem
-    wget -O calico.yaml https://alist.nuoyis.net/d/blog/kubernetes/calico.yaml
+    wget -O calico.yaml https://openlist.nuoyis.net/d/blog/kubernetes/calico.yaml
     sed -i -e '/# - name: CALICO_IPV4POOL_CIDR/{
 N
 N
