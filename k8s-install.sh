@@ -114,6 +114,12 @@ EOF
     systemctl restart containerd
     yum install -y kubelet-$k8sversion kubeadm-$k8sversion kubectl-$k8sversion
     systemctl enable --now kubelet
+    cat >/etc/crictl.yaml <<EOF
+runtime-endpoint: unix:///run/containerd/containerd.sock
+image-endpoint: unix:///run/containerd/containerd.sock
+timeout: 10
+debug: false
+EOF
 }
 
 install::kernel(){
@@ -156,6 +162,16 @@ conf::kubernetes::docker::init(){
 }
 
 conf::kubernetes::containerd::init(){
+    cat > /etc/systemd/system/kubelet.service.d/nuoyis-init.conf << 'EOF'
+[Unit]
+After=containerd.service
+Requires=containerd.service
+
+[Service]
+ExecStartPre=/bin/bash -c '/usr/bin/crictl rm -f $(crictl ps -a -q)'
+ExecStartPre=rm -rf /run/containerd/io.containerd.runtime.v2.task/k8s.io/*
+ExecStartPre=rm -rf /run/containerd/io.containerd.metadata.v1.bolt/meta.db
+EOF
     kubeadm config print init-defaults > kubeadm.yaml
     sed -i -e "s|  criSocket: unix:///var/run/containerd/containerd.sock|  criSocket: unix:///run/containerd/containerd.sock|g" \
            -e "s|imageRepository: registry.k8s.io|imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers|g" \
@@ -303,6 +319,7 @@ conf::kubernetes(){
         else
             conf::kubernetes::containerd::init
         fi
+        
         if [[ -n "${node_value}" ]]; then
             install::otherserver
         fi
@@ -469,6 +486,10 @@ while [[ $# -gt 0 ]]; do
            shift 2
            ;;
         -ma|--master)
+            if [[ -z "$2" ]]; then
+                echo "错误: master 未设置"
+                exit 1
+            fi
             IFS=',' read -ra mastersip <<< "$2"
             master_value=$2
             shift 2
@@ -489,10 +510,18 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -p|--password)
+            if [[ -z "$2" ]]; then
+                echo "错误: passwd 未设置"
+                exit 1
+            fi
             passwd=$2
             shift 2
             ;;
         -bv|--bashdevice)
+            if [[ -z "$2" ]]; then
+                echo "错误: bashdevice 未设置"
+                exit 1
+            fi
             device=$2
             shift 2
             ;;
