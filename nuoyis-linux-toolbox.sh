@@ -1629,28 +1629,33 @@ EOF
 	sysctl -p
 }
 
-show::githuburl(){
-	# 加速器列表
-	github_mirrors=(
-	  "https://study-download.nuoyis.net/github"
-	  "https://ghproxy.com"
-	  "https://raw.fastgit.org"
-	  "https://gh-proxy.com"
-	  "https://raw.githubusercontent.com"
-	)
+show::updateurl(){
+	if [ -z $nuoyis_install_mirrors ];then
+		nuoyis_install_mirrors=1
+	fi
+	if [ $nuoyis_install_mirrors -eq 1 ];then
+		updateurl="https://gitee.com/nuoyis/shell/raw/main/nuoyis-linux-toolbox.sh"
+	else
+		# github加速器列表
+		github_mirrors=(
+	  		"https://ghfast.top"
+	  		"https://gh-proxy.com"
+	  		"https://raw.githubusercontent.com"
+		)
 
-	for github_mirror in "${github_mirrors[@]}"; do
-		test_url="${github_mirror}/https://raw.githubusercontent.com/nuoyis/shell/refs/heads/main/nuoyis-linux-toolbox.sh"
-		curl -sSk -o /dev/null $test_url
-		if [ $? -eq 0 ];then
-	    	updateurl=$test_url
-			break
-	    fi
-	done
+		for github_mirror in "${github_mirrors[@]}"; do
+			test_url="${github_mirror}/https://raw.githubusercontent.com/nuoyis/shell/refs/heads/main/nuoyis-linux-toolbox.sh"
+			curl -sSk -o /dev/null $test_url
+			if [ $? -eq 0 ];then
+	    		updateurl=$test_url
+				break
+	    	fi
+		done
+	fi
 }
 
 show::version(){
-	show::githuburl
+	show::updateurl
 	shell_localhost="/usr/bin/nuoyis-toolbox"
 	REMOTE_HASH=$(curl -k -H "Cache-Control: no-cache" -H "Pragma: no-cache" -sSkL "$updateurl" | sha256sum | awk '{print $1}')
 	LOCAL_HASH=$(sha256sum "$shell_localhost" | awk '{print $1}')
@@ -1712,13 +1717,22 @@ while [[ $# -gt 0 ]]; do
 	    --install)
 			echo "检查脚本是否存在/usr/bin/nuoyis-toolbox中"
 			if [ ! -f /usr/bin/nuoyis-toolbox ]; then
-				echo "脚本不存在存在于环境变量，正在创建到/usr/bin/nuoyis-toolbox"
-				show::githuburl
+				echo "脚本不存在存在于环境变量，正在下载并创建到/usr/bin/nuoyis-toolbox"
+				if [ -z "$2" ];then
+					read -p "请输入下载渠道，1是gitee加速版，2是github版" nuoyis_install_mirrors
+				else
+					nuoyis_install_mirrors=$2
+				fi
+				while [[ ! "$nuoyis_install_mirrors" =~ ^[1-2]$ ]]; do
+					echo "无效输入，请输入 1 2作为有效选项。"
+					read -p "请输入下载渠道，1是gitee加速版，2是github版" nuoyis_install_mirrors
+				done
+				show::updateurl
 				curl -sSkL -o /usr/bin/nuoyis-toolbox $updateurl
 				chmod +x /usr/bin/nuoyis-toolbox
 				echo "开启crontab 自动更新检测，如果介意请使用 crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab - 删除该行"
 				crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab -
-				(crontab -l 2>/dev/null; echo "0 * * * * /usr/bin/nuoyis-toolbox --update;") | crontab -
+				(crontab -l 2>/dev/null; echo "0 * * * * /usr/bin/nuoyis-toolbox --update $nuoyis_install_mirrors;") | crontab -
 			else
 				echo "已通过各种方式部署于环境变量中，无需重复安装"
 			fi
@@ -1802,6 +1816,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
 		-up|--update)
+			nuoyis_install_mirrors=$2
 			update::version
 			exit 0
 			shift
