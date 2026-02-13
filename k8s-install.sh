@@ -144,6 +144,7 @@ conf::kubernetes::join(){
         if ! $is_first_master; then
             source /kubernetes-master-join.sh
         fi
+		rm -rf $HOME/.kube
         mkdir -p $HOME/.kube
         cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
         chown $(id -u):$(id -g) $HOME/.kube/config
@@ -318,6 +319,8 @@ conf::kubernetes(){
             CALICO_URL="https://ghfast.top/https://raw.githubusercontent.com/projectcalico/calico/refs/heads/master/manifests/calico.yaml"
         fi
         wget -O calico.yaml $CALICO_URL
+		# 重置防止重复安装
+		kubeadm reset -f
         if [ $(install::version $k8sversion) -eq 0 ]; then
             conf::kubernetes::docker::init
         else
@@ -349,6 +352,7 @@ for nodeip in "${all_ips[@]}"; do
         fi
     done
 
+	sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "rm -rf /k8s-install.sh"
     sshpass -p "$passwd" scp -o StrictHostKeyChecking=no k8s-install.sh root@$nodeip:/
     if $is_master; then
         sshpass -p "$passwd" scp -o StrictHostKeyChecking=no kubernetes-master-join.sh root@$nodeip:/kubernetes-master-join.sh
