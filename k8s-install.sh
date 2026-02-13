@@ -19,7 +19,11 @@ keepalived="$(hostname -I | awk '{print $1}' | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]
 is_first_master=false
 MIN_VERSION="1.19.0"
 MAX_VERSION=$(curl -s "http://version.nuoyis.net/versions.json" | grep -o '"kubernetes"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*: *"//;s/"$//');
-k8sversion=${MAX_VERSION:-"1.34.0"}
+# 如果获取失败或为空，使用默认值
+if [ -z "$MAX_VERSION" ]; then
+    MAX_VERSION="1.34.0"
+fi
+k8sversion="$MAX_VERSION"
 compare_versions() {
     local ver1=$(echo "$1" | sed 's/^v//' | cut -d'-' -f1 | cut -d'+' -f1)
     local ver2=$(echo "$2" | sed 's/^v//' | cut -d'-' -f1 | cut -d'+' -f1)
