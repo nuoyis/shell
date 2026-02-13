@@ -18,7 +18,7 @@ system_version=${system_version%.*}
 keepalived="$(hostname -I | awk '{print $1}' | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)\..*/\1/').199:16443"
 is_first_master=false
 MIN_VERSION="1.19.0"
-MAX_VERSION=$(curl -s "http://version.nuoyis.net/json/kubernetes.json" | grep -o '"kubernetes"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*: *"//;s/"$//');
+MAX_VERSION=$(curl -sk "https://version.nuoyis.net/json/kubernetes.json" | grep -o '"versions"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*: *"//;s/"$//');
 # 如果获取失败或为空，使用默认值
 if [ -z "$MAX_VERSION" ]; then
     MAX_VERSION="1.34.0"
