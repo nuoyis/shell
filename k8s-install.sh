@@ -148,13 +148,13 @@ conf::kubernetes::join(){
         mkdir -p $HOME/.kube
         cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
         chown $(id -u):$(id -g) $HOME/.kube/config
+		sed -i '/KUBECONFIG/d' /etc/bashrc
         export KUBECONFIG=/etc/kubernetes/admin.conf
         echo "KUBECONFIG=/etc/kubernetes/admin.conf" >> /etc/bashrc
         if $is_first_master; then
             if [ "${#mastersip[@]}" -gt 1 ]; then
                 systemctl enable --now nginx
             fi
-            kubectl apply -f calico.yaml
         fi
     else
         source /kubernetes-node-join.sh
@@ -311,15 +311,6 @@ c\
 
 conf::kubernetes(){
     if [[ "$device" == "master" && "$is_first_master" == true ]]; then
-        KUBE_MINOR=$(echo "$k8sversion" | awk -F. '{print $2}')
-        if [ "$KUBE_MINOR" -lt 21 ]; then
-            echo "Kubernetes $k8sversion (<1.21)，安装k8s后部署 Calico v3.19"
-            CALICO_URL="https://docs.projectcalico.org/archive/v3.19/manifests/calico.yaml"
-        else
-            echo "Kubernetes $k8sversion (>=1.21)，安装k8s后部署最新 Calico"
-            CALICO_URL="https://ghfast.top/https://raw.githubusercontent.com/projectcalico/calico/refs/heads/master/manifests/calico.yaml"
-        fi
-        wget -O calico.yaml $CALICO_URL
 		# 重置防止重复安装
 		kubeadm reset -f
         if [ $(install::version $k8sversion) -eq 0 ]; then
@@ -327,12 +318,26 @@ conf::kubernetes(){
         else
             conf::kubernetes::containerd::init
         fi
-        
+		conf::kubernetes::join
+		# 等待配置生效
+		sleep 5
+		KUBE_MINOR=$(echo "$k8sversion" | awk -F. '{print $2}')
+        if [ "$KUBE_MINOR" -lt 21 ]; then
+            echo "Kubernetes $k8sversion (<1.21)，安装k8s后部署 Calico v3.19"
+            CALICO_URL="https://docs.projectcalico.org/archive/v3.19/manifests/calico.yaml"
+        else
+            echo "Kubernetes $k8sversion (>=1.21)，安装k8s后部署最新 Calico"
+            CALICO_URL="https://ghfast.top/https://raw.githubusercontent.com/projectcalico/calico/refs/heads/master/manifests/calico.yaml"
+        fi
+		wget -O calico.yaml $CALICO_URL
+        kubectl apply -f calico.yaml
         if [[ -n "${node_value}" ]]; then
             install::otherserver
         fi
+	else
+		conf::kubernetes::join
     fi
-    conf::kubernetes::join
+	sed -i '/kubectl completion bash/d' /etc/bashrc
     echo "source <(kubectl completion bash)" >> /etc/bashrc
     bash /etc/bashrc
 }
