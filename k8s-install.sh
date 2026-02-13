@@ -167,7 +167,8 @@ conf::kubernetes::docker::init(){
 }
 
 conf::kubernetes::containerd::init(){
-    cat > /etc/systemd/system/kubelet.service.d/nuoyis-init.conf < 'EOF'
+	mkdir -p /etc/systemd/system/kubelet.service.d/
+    cat > /etc/systemd/system/kubelet.service.d/nuoyis-init.conf << 'EOF'
 [Unit]
 After=containerd.service
 Requires=containerd.service
