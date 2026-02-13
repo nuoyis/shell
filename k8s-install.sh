@@ -18,7 +18,7 @@ system_version=${system_version%.*}
 keepalived="$(hostname -I | awk '{print $1}' | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)\..*/\1/').199:16443"
 is_first_master=false
 MIN_VERSION="1.19.0"
-MAX_VERSION=$(curl -s "http://lnmp-versions.nuoyis.net/versions.json" | grep -o '"kubernetes"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*: *"//;s/"$//');
+MAX_VERSION=$(curl -s "http://version.nuoyis.net/versions.json" | grep -o '"kubernetes"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*: *"//;s/"$//');
 k8sversion=${MAX_VERSION:-"1.34.0"}
 compare_versions() {
     local ver1=$(echo "$1" | sed 's/^v//' | cut -d'-' -f1 | cut -d'+' -f1)
@@ -144,7 +144,7 @@ conf::kubernetes::join(){
         cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
         chown $(id -u):$(id -g) $HOME/.kube/config
         export KUBECONFIG=/etc/kubernetes/admin.conf
-        echo "KUBECONFIG=/etc/kubernetes/admin.conf" >>/etc/bashrc
+        echo "KUBECONFIG=/etc/kubernetes/admin.conf" >> /etc/bashrc
         if $is_first_master; then
             if [ "${#mastersip[@]}" -gt 1 ]; then
                 systemctl enable --now nginx
