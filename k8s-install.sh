@@ -163,7 +163,6 @@ conf::kubernetes::join(){
 
 conf::kubernetes::docker::init(){
     kubeadm init --kubernetes-version=$k8sversion --apiserver-advertise-address=${mastersip[0]} --image-repository registry.aliyuncs.com/google_containers  --pod-network-cidr=10.223.0.0/16 --ignore-preflight-errors=SystemVerification --ignore-preflight-errors=Mem
-    sed -i 's#docker.io/##g' calico.yaml
 }
 
 conf::kubernetes::containerd::init(){
@@ -285,17 +284,6 @@ kind: KubeletConfiguration
 cgroupDriver: systemd
 EOF
     kubeadm init --config=kubeadm.yaml --ignore-preflight-errors=SystemVerification --ignore-preflight-errors=Mem
-    sed -i -e '/# - name: CALICO_IPV4POOL_CIDR/{
-N
-N
-c\
-            - name: CALICO_IPV4POOL_CIDR\
-              value: "10.223.0.0/12"\
-            - name: IP_AUTODETECTION_METHOD\
-              value: "interface='"$networkname"'"
-}' \
-   -e 's|docker.io|docker.m.daocloud.io|g' \
-   -e 's|quay.io|quay.dockerproxy.net|g' calico.yaml
     for masterip in "${mastersip[@]:1}"; do
         sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$masterip "mkdir -p /etc/kubernetes/pki/etcd && mkdir -p /root/.kube/"
         sshpass -p "$passwd" scp -o StrictHostKeyChecking=no /etc/kubernetes/pki/ca.crt root@$masterip:/etc/kubernetes/pki/
@@ -324,12 +312,23 @@ conf::kubernetes(){
 		KUBE_MINOR=$(echo "$k8sversion" | awk -F. '{print $2}')
         if [ "$KUBE_MINOR" -lt 21 ]; then
             echo "Kubernetes $k8sversion (<1.21)，安装k8s后部署 Calico v3.19"
-            CALICO_URL="https://docs.projectcalico.org/archive/v3.19/manifests/calico.yaml"
+            wget -O calico.yaml "https://docs.projectcalico.org/archive/v3.19/manifests/calico.yaml"
+			sed -i 's#docker.io/##g' calico.yaml
         else
             echo "Kubernetes $k8sversion (>=1.21)，安装k8s后部署最新 Calico"
-            CALICO_URL="https://ghfast.top/https://raw.githubusercontent.com/projectcalico/calico/refs/heads/master/manifests/calico.yaml"
+			wget -O calico.yaml "https://ghfast.top/https://raw.githubusercontent.com/projectcalico/calico/refs/heads/master/manifests/calico.yaml"
+			sed -i -e '/# - name: CALICO_IPV4POOL_CIDR/{
+N
+N
+c\
+            - name: CALICO_IPV4POOL_CIDR\
+              value: "10.223.0.0/12"\
+            - name: IP_AUTODETECTION_METHOD\
+              value: "interface='"$networkname"'"
+}' \
+   			-e 's|docker.io|docker.m.daocloud.io|g' \
+   			-e 's|quay.io|quay.dockerproxy.net|g' calico.yaml
         fi
-		wget -O calico.yaml $CALICO_URL
         kubectl apply -f calico.yaml
         if [[ -n "${node_value}" ]]; then
             install::otherserver
