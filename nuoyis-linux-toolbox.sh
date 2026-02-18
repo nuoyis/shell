@@ -1317,88 +1317,85 @@ conf::reposource::redhat(){
 }
 
 conf::reposource(){
-# reponum=`$PM list | wc -l`
-
-# if [ $reponum -lt 1000 ];then
-if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
-	echo "正在移动源到/etc/yum.repos.d/bak"
-	if [ ! -d /etc/yum.repos.d/bak ];then
-		mkdir -p /etc/yum.repos.d/bak
-	fi
-	mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
-	mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
-
-	# 判断源站
-	if [ "$options_yum_install" == "other" ]; then
-		manager::download https://linuxmirrors.cn/main.sh
-		source main.sh
-		echo "yes"
-	else
-		manager::repositories installcheck epel
-		if [ $? -eq 0 ];then
-			manager::repositories remove epel-release epel-next-release
+	if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
+		echo "正在移动源到/etc/yum.repos.d/bak"
+		if [ ! -d /etc/yum.repos.d/bak ];then
+			mkdir -p /etc/yum.repos.d/bak
 		fi
-
-		manager::repositories installcheck remi
-		if [ $? -eq 0 ];then
-			manager::repositories remove remi-release.remi.noarch
-		fi
-
-		manager::repositories installcheck elrepo
-		if [ $? -eq 0 ];then
-			manager::repositories remove elrepo-release.noarch
-		fi
-		if [ $system_name == "openEuler" ];then
-			sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
+		mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
+		mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
+	
+		# 判断源站
+		if [ "$options_yum_install" == "other" ]; then
+			manager::download https://linuxmirrors.cn/main.sh
+			source main.sh
+			echo "yes"
 		else
-			if [ $system_name == "Rocky" ];then
-				echo "正在检查是否存在冲突/模块缺失"
-				echo "正在检查模块依赖问题..."
-				options_install_check_modules_bug=$($PM check 2>&1)
-				if [ -z "$options_install_check_modules_bug" ]; then
-					echo "没有发现模块依赖问题,继续下一步"
-				else
-					echo "发现模块依赖问题："
-					# 提取并禁用冲突的模块
-					echo "正在禁用冲突模块"
-					while read -r module; do
-						# 提取模块名和版本
-						module_name=$(echo $module | grep -oP '(?<=module )[^:]+:[^ ]+' | sed 's/:[^:]*$//')
-						if [ -n "$module_name" ]; then
-							echo "禁用模块: $module_name"
-							sudo yum module disable "$module_name" -y
-							if [ $? -eq 0 ]; then
-								echo "模块 $module_name 禁用成功"
-							else
-								echo "模块 $module_name 禁用失败"
-							fi
-						fi
-					done <<< "$options_install_check_modules_bug"
-					echo "模块依赖修复和冲突模块禁用完成。"
-				fi
+			manager::repositories installcheck epel
+			if [ $? -eq 0 ];then
+				manager::repositories remove epel-release epel-next-release
 			fi
-			conf::reposource::yum
+	
+			manager::repositories installcheck remi
+			if [ $? -eq 0 ];then
+				manager::repositories remove remi-release.remi.noarch
+			fi
+	
+			manager::repositories installcheck elrepo
+			if [ $? -eq 0 ];then
+				manager::repositories remove elrepo-release.noarch
+			fi
+			if [ $system_name == "openEuler" ];then
+				sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
+			else
+				if [ $system_name == "Rocky" ];then
+					echo "正在检查是否存在冲突/模块缺失"
+					echo "正在检查模块依赖问题..."
+					options_install_check_modules_bug=$($PM check 2>&1)
+					if [ -z "$options_install_check_modules_bug" ]; then
+						echo "没有发现模块依赖问题,继续下一步"
+					else
+						echo "发现模块依赖问题："
+						# 提取并禁用冲突的模块
+						echo "正在禁用冲突模块"
+						while read -r module; do
+							# 提取模块名和版本
+							module_name=$(echo $module | grep -oP '(?<=module )[^:]+:[^ ]+' | sed 's/:[^:]*$//')
+							if [ -n "$module_name" ]; then
+								echo "禁用模块: $module_name"
+								sudo yum module disable "$module_name" -y
+								if [ $? -eq 0 ]; then
+									echo "模块 $module_name 禁用成功"
+								else
+									echo "模块 $module_name 禁用失败"
+								fi
+							fi
+						done <<< "$options_install_check_modules_bug"
+						echo "模块依赖修复和冲突模块禁用完成。"
+					fi
+				fi
+				conf::reposource::yum
+			fi
+			
 		fi
-		
+	elif [ $PM = "apt" ];then
+			conf::reposource::deb
 	fi
-elif [ $PM = "apt" ];then
-		conf::reposource::deb
-fi
-
-	# 红帽系统特调
-	if [ $system_name == "Red" ];then
-		conf::reposource::redhat
-	fi
-	if [[ ! -f /root/.toolbox-install-init.lock ]]; then
-		echo "正在安装时间同步软件，以及检查时间并同步，防止yum报错"
-		if [ -f /etc/redhat-release ]; then
-    		yum --setopt=sslverify=0 -y install chrony
-		elif [ -f /etc/debian_version ]; then
-    		apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false update -y
-    		apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false install -y chrony
+	
+		# 红帽系统特调
+		if [ $system_name == "Red" ];then
+			conf::reposource::redhat
 		fi
-	fi
-	cat > "$chronyconf" << EOF
+		if [[ ! -f /root/.toolbox-install-init.lock ]]; then
+			echo "正在安装时间同步软件，以及检查时间并同步，防止yum报错"
+			if [ -f /etc/redhat-release ]; then
+	    		yum --setopt=sslverify=0 -y install chrony
+			elif [ -f /etc/debian_version ]; then
+	    		apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false update -y
+	    		apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false install -y chrony
+			fi
+		fi
+		cat > "$chronyconf" << EOF
 server ntp.aliyun.com iburst
 server ntp1.aliyun.com iburst
 server ntp2.aliyun.com iburst
@@ -1427,19 +1424,20 @@ EOF
 		echo "等待 10 秒让时间生效..."
 		sleep 10
 	fi
-	# 配置附加源(重复执行重新配置)
+	# 配置附加源(重新配置)
 	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
 		conf::reposource::yum_additional_source
 	fi
 
-	echo "正在更新源"
-	rm -rf /etc/yum.repods.d/*.rpmsave
-	
-	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
-		manager::repositories clean
-		manager::repositories makecache
+	if [[ $mirror_update -eq 1 ]];then
+		echo "正在更新源"
+		rm -rf /etc/yum.repods.d/*.rpmsave
+		if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+			manager::repositories clean
+			manager::repositories makecache
+		fi
+		manager::repositories update
 	fi
-	manager::repositories update
 }
 
 install::kernel(){
@@ -1597,10 +1595,10 @@ install::main(){
 
 	echo "安装核心软件包"
 	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
-		manager::repositories install dnf-plugins-core python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils tar chrony
+		manager::repositories install sshpass dnf-plugins-core python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils tar chrony
 	else
 		export DEBIAN_FRONTEND=noninteractive
-		manager::repositories install python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc g++ make unzip perl libipc-cmd-perl libtest-simple-perl pciutils tar ca-certificates curl gnupg ufw chrony
+		manager::repositories install sshpass python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc g++ make unzip perl libipc-cmd-perl libtest-simple-perl pciutils tar ca-certificates curl gnupg ufw chrony
 	fi
 }
 
@@ -1766,6 +1764,10 @@ while [[ $# -gt 0 ]]; do
             # conf::reposource
             shift 2
             ;;
+		-ru|--mirrorupdate)
+			mirror_update=1
+			shift
+			;;
         -ln|--lnmp)
             if [[ "$2" != "gcc" && "$2" != "docker" && "$2" != "yum" ]]; then
                 echo "unknown volume: $2"
