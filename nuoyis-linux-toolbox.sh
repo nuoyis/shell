@@ -15,6 +15,7 @@ export PATH
 LANG=en_US.UTF-8
 # 变量初始化区域
 prefix=""
+mirror_update=0
 prefixmirror=${prefix:+$prefix - }
 prefixpath=${prefix:+$prefix-}
 options_yum=0

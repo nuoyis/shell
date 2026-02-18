@@ -585,9 +585,8 @@ else
             if [[ "$ip" == "${mastersip[0]}" ]]; then
                 is_first_master=true
                 # 新改并行安装方法
-                if [ ! -f /usr/bin/nuoyis-toolbox ]; then
-                    curl -sSk -o /usr/bin/nuoyis-toolbox https://gitee.com/nuoyis/shell/raw/main/nuoyis-linux-toolbox.sh
-                    chmod +x /usr/bin/nuoyis-toolbox
+                if [ ! -f /usr/bibn/nuoyis-toolbox ]; then
+                    bash <(curl -sSLk https://shell.nuoyis.net/nuoyis-linux-toolbox.sh) --install 1 > /dev/null 2>&1
                     nuoyis-toolbox -r aliyun
                 fi
                 yum install sshpass -y
@@ -597,8 +596,7 @@ else
                 all_ips=("${mastersip[@]}" "${nodesip[@]}")
                 for initip in "${all_ips[@]}"; do
                     {
-                    sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh"
-                    sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "chmod +x /usr/bin/nuoyis-toolbox"
+                    sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "source <(curl -sSLk https://shell.nuoyis.net/nuoyis-linux-toolbox.sh) --install 1 > /dev/null 2>&1"
                     sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "nuoyis-toolbox -r aliyun -do" >> "/var/log/toolbox-kubernetes/${initip}.log" 2>&1
                     } &
                     pid=$!
