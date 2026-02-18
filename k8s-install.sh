@@ -383,9 +383,9 @@ install::otherserver(){
 
         if [ $(install::version $k8sversion) -eq 1 ]; then
             if printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$kernel_version" | sort -V -C; then
-                echo "内核版本满足要求，开始安装"
+                echo "内核版本满足要求，开始部署"
             else
-                echo "内核版本过低，开始升级并重启"
+                echo "内核版本过低，开始升级内核并重启"
             fi
         fi
         sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "bash /k8s-install.sh --master $master_value --node $node_value --password $passwd --bashdevice $( $is_master && echo master || echo node ) --version $k8sversion"  
@@ -590,7 +590,7 @@ else
                     nuoyis-toolbox -r aliyun
                 fi
                 yum install sshpass -y
-                echo "正在并行安装，请在/var/log/toolbox-kubernetes内查看部署日志"
+                echo "正在并行安装基础软件，请在/var/log/toolbox-kubernetes内查看部署日志"
                 echo "等待并行安装完成"
                 mkdir -p /var/log/toolbox-kubernetes
                 all_ips=("${mastersip[@]}" "${nodesip[@]}")
