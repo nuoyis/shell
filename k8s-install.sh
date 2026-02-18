@@ -18,6 +18,7 @@ system_version=${system_version%.*}
 keepalived="$(hostname -I | awk '{print $1}' | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)\..*/\1/').199:16443"
 is_first_master=false
 MIN_VERSION="1.19.0"
+k8slight=0
 MAX_VERSION=$(curl -sk "https://version.nuoyis.net/json/kubernetes.json" | grep -o '"versions"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*: *"//;s/"$//');
 # 如果获取失败或为空，使用默认值
 if [ -z "$MAX_VERSION" ]; then
@@ -167,7 +168,7 @@ conf::kubernetes::docker::init(){
 
 conf::kubernetes::containerd::init(){
     # 树莓派
-    if [$(uname -m) != "x86_64" ];then
+    if [ $(uname -m) != "x86_64" ];then
         touch /toolbox-pi-containerkill.sh
         cat > /toolbox-pi-containerkill.sh << "EOF"
 mkdir -p /etc/systemd/system/kubelet.service.d/
@@ -510,6 +511,10 @@ while [[ $# -gt 0 ]]; do
            k8sversion=$2
            shift 2
            ;;
+        -lg|--light)
+            k8slight=1
+            shift
+            ;;
         -ma|--master)
             if [[ -z "$2" ]]; then
                 echo "错误: master 未设置"
@@ -557,74 +562,80 @@ while [[ $# -gt 0 ]]; do
             echo "unknown Options: $1"
     esac
 done
-
-if [ $(compare_versions $k8sversion $MIN_VERSION) -lt 0 ]; then
-    echo "输入的版本 ($k8sversion) 低于最低支持版本 ($MIN_VERSION)。"
-    exit 1
-elif [ $(compare_versions $k8sversion $MAX_VERSION) -gt 0 ]; then
-    echo "输入的版本 ($k8sversion) 高于最大支持版本 ($MAX_VERSION)。"
-    exit 1
+if [ $k8slight -eq 1 ];then
+    curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
+    chmod +x /usr/bin/nuoyis-toolbox
+    nuoyis-toolbox -r aliyun -do
+    curl -sfL https://rancher-mirror.rancher.cn/k3s/k3s-install.sh | INSTALL_K3S_MIRROR=cn INSTALL_K3S_EXEC="--docker --disable traefik,metrics-server --service-node-port-range=1-65535 --flannel-ipv6-masq" sh -
 else
-    if [ $(install::version $k8sversion) -eq 0 ]; then
-        if [ $system_version -gt "8" ];then
-            echo "8版本以上不支持docker版本"
-            exit 1
-        fi
-    fi
-    for ip in $(hostname -I); do
-        if [[ "$ip" == "${mastersip[0]}" ]]; then
-            is_first_master=true
-            # 新改并行安装方法
-            echo "正在并行安装，请在/var/log/toolbox-kubernetes内查看部署日志"
-            echo "等待并行安装完成"
-            mkdir -p /var/log/toolbox-kubernetes
-            all_ips=("${mastersip[@]}" "${nodesip[@]}")
-            for initip in "${all_ips[@]}"; do
-                {
-                sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh"
-                sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "chmod +x /usr/bin/nuoyis-toolbox"
-                sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "nuoyis-toolbox -r aliyun -do" >> "/var/log/toolbox-kubernetes/${initip}.log" 2>&1
-                } &
-                pid=$!
-                pids+=($pid)
-                pid_host[$pid]=$initip
-            done
-            for pid in "${pids[@]}"; do
-                wait $pid
-                if [ $? -ne 0 ]; then
-                echo "${pid_host[$pid]}安装失败"
-                ((fail_count++))
-                fi
-            done
-            break
-        fi
-    done
-
-    # k8s 安装初始化
-    install::init
-
-    # 与toolbox冲突部分更换稳定版本
-    if [ $(install::version $k8sversion) -eq 0 ]; then
-        # 删除toolbox内下载的最新版本
-        yum remove -y docker-ce docker-ce-cli docker-ce-rootless-extras docker-buildx-plugin docker-compose-plugin -y
-        yum install docker-ce-19.03.15 docker-ce-cli-19.03.15 -y
-    fi
-
-    # k8s 安装
-    install::kubernetes
-    if [ $(install::version $k8sversion) -eq 1 ]; then
-        if [ $system_version == "7" ];then
-            echo "当前内核版本: $current_kernel"
-            echo "Kubernetes 要求最低版本: $MIN_KERNEL_VERSION"
-            if printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$current_kernel" | sort -V -C; then
-                echo "当前内核版本满足 Kubernetes 要求,正在安装kubernetes"
-            else
-                echo "当前内核版本低于 Kubernetes 要求,需升级内核后重启"
-                echo "正在升级内核，会自动重启"
-                install::kernel
-                exit 0
+    if [ $(compare_versions $k8sversion $MIN_VERSION) -lt 0 ]; then
+        echo "输入的版本 ($k8sversion) 低于最低支持版本 ($MIN_VERSION)。"
+        exit 1
+    elif [ $(compare_versions $k8sversion $MAX_VERSION) -gt 0 ]; then
+        echo "输入的版本 ($k8sversion) 高于最大支持版本 ($MAX_VERSION)。"
+        exit 1
+    else
+        if [ $(install::version $k8sversion) -eq 0 ]; then
+            if [ $system_version -gt "8" ];then
+                echo "8版本以上不支持docker版本"
+                exit 1
             fi
         fi
+        for ip in $(hostname -I); do
+            if [[ "$ip" == "${mastersip[0]}" ]]; then
+                is_first_master=true
+                # 新改并行安装方法
+                echo "正在并行安装，请在/var/log/toolbox-kubernetes内查看部署日志"
+                echo "等待并行安装完成"
+                mkdir -p /var/log/toolbox-kubernetes
+                all_ips=("${mastersip[@]}" "${nodesip[@]}")
+                for initip in "${all_ips[@]}"; do
+                    {
+                    sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh"
+                    sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "chmod +x /usr/bin/nuoyis-toolbox"
+                    sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "nuoyis-toolbox -r aliyun -do" >> "/var/log/toolbox-kubernetes/${initip}.log" 2>&1
+                    } &
+                    pid=$!
+                    pids+=($pid)
+                    pid_host[$pid]=$initip
+                done
+                for pid in "${pids[@]}"; do
+                    wait $pid
+                    if [ $? -ne 0 ]; then
+                    echo "${pid_host[$pid]}安装失败"
+                    ((fail_count++))
+                    fi
+                done
+                break
+            fi
+        done
+
+        # k8s 安装初始化
+        install::init
+
+        # 与toolbox冲突部分更换稳定版本
+        if [ $(install::version $k8sversion) -eq 0 ]; then
+            # 删除toolbox内下载的最新版本
+            yum remove -y docker-ce docker-ce-cli docker-ce-rootless-extras docker-buildx-plugin docker-compose-plugin -y
+            yum install docker-ce-19.03.15 docker-ce-cli-19.03.15 -y
+        fi
+
+        # k8s 安装
+        install::kubernetes
+        if [ $(install::version $k8sversion) -eq 1 ]; then
+            if [ $system_version == "7" ];then
+                echo "当前内核版本: $current_kernel"
+                echo "Kubernetes 要求最低版本: $MIN_KERNEL_VERSION"
+                if printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$current_kernel" | sort -V -C; then
+                    echo "当前内核版本满足 Kubernetes 要求,正在安装kubernetes"
+                else
+                    echo "当前内核版本低于 Kubernetes 要求,需升级内核后重启"
+                    echo "正在升级内核，会自动重启"
+                    install::kernel
+                    exit 0
+                fi
+            fi
+        fi
+        conf::kubernetes
     fi
-    conf::kubernetes
 fi
