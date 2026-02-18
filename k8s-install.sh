@@ -585,9 +585,11 @@ else
             if [[ "$ip" == "${mastersip[0]}" ]]; then
                 is_first_master=true
                 # 新改并行安装方法
-                curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
-                chmod +x /usr/bin/nuoyis-toolbox
-                nuoyis-toolbox -r aliyun
+                if [ ! -f /usr/bin/nuoyis-toolbox ]; then
+                    curl -sSk -o /usr/bin/nuoyis-toolbox https://gitee.com/nuoyis/shell/raw/main/nuoyis-linux-toolbox.sh
+                    chmod +x /usr/bin/nuoyis-toolbox
+                    nuoyis-toolbox -r aliyun
+                fi
                 yum install sshpass -y
                 echo "正在并行安装，请在/var/log/toolbox-kubernetes内查看部署日志"
                 echo "等待并行安装完成"
