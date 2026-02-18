@@ -166,8 +166,12 @@ conf::kubernetes::docker::init(){
 }
 
 conf::kubernetes::containerd::init(){
-	mkdir -p /etc/systemd/system/kubelet.service.d/
-    cat > /etc/systemd/system/kubelet.service.d/nuoyis-init.conf << 'EOF'
+    # 树莓派
+    if [$(uname -m) != "x86_64" ];then
+        touch /toolbox-pi-containerkill.sh
+        cat > /toolbox-pi-containerkill.sh << "EOF"
+mkdir -p /etc/systemd/system/kubelet.service.d/
+cat > /etc/systemd/system/kubelet.service.d/nuoyis-init.conf << 'pi_EOF'
 [Unit]
 After=containerd.service
 Requires=containerd.service
@@ -176,7 +180,9 @@ Requires=containerd.service
 ExecStartPre=/bin/bash -c '/usr/bin/crictl rm -f $(crictl ps -a -q)'
 ExecStartPre=rm -rf /run/containerd/io.containerd.runtime.v2.task/k8s.io/*
 ExecStartPre=rm -rf /run/containerd/io.containerd.metadata.v1.bolt/meta.db
+pi_EOF
 EOF
+    fi
     kubeadm config print init-defaults > kubeadm.yaml
     sed -i -e "s|  criSocket: unix:///var/run/containerd/containerd.sock|  criSocket: unix:///run/containerd/containerd.sock|g" \
            -e "s|imageRepository: registry.k8s.io|imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers|g" \
