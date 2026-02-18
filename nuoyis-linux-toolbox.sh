@@ -14,7 +14,9 @@ export PATH
 # 语言设置
 LANG=en_US.UTF-8
 # 变量初始化区域
-nuname="nuoyis"
+prefix=""
+prefixmirror=${prefix:+$prefix - }
+prefixpath=${prefix:+$prefix-}
 options_yum=0
 options_lnmp=0
 options_tuning=0
@@ -296,11 +298,11 @@ EOF
 install::nas(){
     sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
     useradd nas
-    mkdir -p /$nuname-server/sharefile
-    chown -R nas:nas /$nuname-server/sharefile
-    chown root:nas /$nuname-server/sharefile
-    chmod -R 775 /$nuname-server/sharefile
-    # chmod g+s /$nuname-server/sharefile
+    mkdir -p /${prefixpath}server/sharefile
+    chown -R nas:nas /${prefixpath}server/sharefile
+    chown root:nas /${prefixpath}server/sharefile
+    chmod -R 775 /${prefixpath}server/sharefile
+    # chmod g+s /${prefixpath}server/sharefile
     # 额外配置
     manager::repositories install vsftpd samba
 
@@ -329,14 +331,14 @@ anon_mkdir_write_enable=YES
 anon_other_write_enable=YES
 # 匿名用户的掩码（022 的实际权限为 666-022=644）
 anon_umask=022
-anon_root=/$nuname-server/sharefile
+anon_root=/${prefixpath}server/sharefile
 chown_uploads=YES
 chown_username=nas
 
 # 系统用户登录
 local_enable=YES
 local_umask=022
-local_root=/$nuname-server/sharefile
+local_root=/${prefixpath}server/sharefile
 chroot_local_user=YES
 allow_writeable_chroot=YES
 chroot_list_enable=YES
@@ -395,8 +397,8 @@ cat > /etc/samba/smb.conf <<EOF
 	directory mask = 0775
 
 [share]
-        comment = $nuname's share
-        path = /$nuname-server/sharefile
+        comment = share
+        path = /${prefixpath}server/sharefile
 		browsable = yes
 		writable = yes
 		guest ok = yes
@@ -407,14 +409,14 @@ cat > /etc/samba/smb.conf <<EOF
         public = yes
 EOF
 
-cat >> /etc/profile << EOF
-echo "################################"
-echo "#  Welcome  to  $nuname's  NAS  #"
-echo "################################"
-EOF
+# cat >> /etc/profile << EOF
+# echo "################################"
+# echo "#  Welcome  to  visit  NAS  #"
+# echo "################################"
+# EOF
 
 if [[  $options_lnmp_value == "yum" ]];then
-	cat > /$nuname-server/web/nginx/conf/nas.conf << EOF
+	cat > /${prefixpath}server/web/nginx/conf/nas.conf << EOF
 server {
 	listen 80;
     listen [::]:80;
@@ -423,7 +425,7 @@ server {
 	#charset koi8-r;
 	charset utf-8;
 	location /nuoyisnb {
-        alias /$nuname-server/sharefile;
+        alias /${prefixpath}server/sharefile;
         autoindex on;                         # 启用自动首页功能
         autoindex_format html;                # 首页格式为HTML
         autoindex_exact_size off;             # 文件大小自动换算
@@ -455,10 +457,10 @@ server {
 	}
 }
 EOF
-	rm -rf /$nuname-server/web/nginx/conf/default.conf
+	rm -rf /${prefixpath}server/web/nginx/conf/default.conf
 	systemctl reload nginx
 elif [[ $options_lnmp_value == "gcc" ]] || [[ $options_lnmp_value == "docker" ]];then
-	cat > /$nuname-server/web/nginx/conf/default.conf.init << EOF
+	cat > /${prefixpath}server/web/nginx/conf/default.conf.init << EOF
 # 默认页面的 自定义设置(禁止编写server，否则报错)
 
 # 301 配置
@@ -505,8 +507,8 @@ error_page 404 /404.html;
 error_page 500 502 503 504 /50x.html;
 EOF
 	if [[ $options_lnmp_value == "gcc" ]];then
-		sed -i "s#/web#/$nuname-server/web#g" /$nuname-server/web/nginx/conf/default.conf.init
-		sed -i "s#alias /$nuname-server/web/sharefile#alias /$nuname-server/sharefile#g" /$nuname-server/web/nginx/conf/default.conf.init
+		sed -i "s#/web#/${prefixpath}server/web#g" /${prefixpath}server/web/nginx/conf/default.conf.init
+		sed -i "s#alias /${prefixpath}server/web/sharefile#alias /${prefixpath}server/sharefile#g" /${prefixpath}server/web/nginx/conf/default.conf.init
 		systemctl reload nginx
 	else
 		docker restart lnmp-np
@@ -526,7 +528,7 @@ sleep 10
 
 install::docker(){
 	echo "安装Docker"
-	mkdir -p /$nuname-server/docker-yaml/
+	mkdir -p /${prefixpath}server/docker-yaml/
 	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
 		manager::repositories install yum-utils device-mapper-persistent-data lvm2
 		manager::repositories repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
@@ -570,13 +572,13 @@ EOF
 }
 
 install::dockerapp(){
-	cat > /$nuname-server/docker-yaml/app.yaml <<EOF
+	cat > /${prefixpath}server/docker-yaml/app.yaml <<EOF
 services:
   apps-openlist:
     container_name: apps-openlist
     image: docker.m.daocloud.io/openlistteam/openlist:latest-aio
     volumes:
-      - /$nuname-server/openlist/data:/opt/openlist/data
+      - /${prefixpath}server/openlist/data:/opt/openlist/data
     ports:
       - 5244:5244
     environment:
@@ -588,7 +590,7 @@ services:
     container_name: apps-qinglong
     image: docker.m.daocloud.io/whyour/qinglong
     volumes:
-      - /$nuname-server/qinglong/data:/ql/data
+      - /${prefixpath}server/qinglong/data:/ql/data
     ports:
       - 5700:5700
     environment:
@@ -601,7 +603,7 @@ services:
       - 7001:7001
       - 7002:7002
     volumes:
-      - /$nuname-server/certd:/app/data
+      - /${prefixpath}server/certd:/app/data
     labels:
       com.centurylinklabs.watchtower.enable: "true"
     environment:
@@ -634,7 +636,7 @@ services:
 #       - CRON_SIGNIN=30 9 * * *
 #       - MULTI=TRUE
 #     volumes:
-#       - /$nuname-server/MihoyoBBSTools:/var/app
+#       - /${prefixpath}server/MihoyoBBSTools:/var/app
 #     logging:
 #       driver: "json-file"
 #       options:
@@ -644,9 +646,9 @@ services:
 #     container_name: apps-jd-autologin
 #     restart: always
 #     volumes:
-#       - /$nuname-server/jd/config.py:/app/config.py
+#       - /${prefixpath}server/jd/config.py:/app/config.py
 EOF
-docker-compose -f /$nuname-server/docker-yaml/app.yaml up -d
+docker-compose -f /${prefixpath}server/docker-yaml/app.yaml up -d
 }
 
 install::ollama(){
@@ -702,18 +704,18 @@ http {
     client_max_body_size 10M;
 
     # 其他页面
-    include /$nuname-server/web/nginx/conf/*.conf;
+    include /${prefixpath}server/web/nginx/conf/*.conf;
 }
 EOF
-cat > /$nuname-server/web/nginx/conf/default.conf << EOF
+cat > /${prefixpath}server/web/nginx/conf/default.conf << EOF
  # 默认页面的 server 配置
 server {
     listen 80 default_server;
     listen 443 default_server ssl;
     server_name _;
     # SSL 配置
-    ssl_certificate /$nuname-server/web/nginx/server/conf/ssl/default.pem;
-    ssl_certificate_key /$nuname-server/web/nginx/server/conf/ssl/default.key;
+    ssl_certificate /${prefixpath}server/web/nginx/server/conf/ssl/default.pem;
+    ssl_certificate_key /${prefixpath}server/web/nginx/server/conf/ssl/default.key;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
     ssl_prefer_server_ciphers on;
@@ -721,7 +723,7 @@ server {
     ssl_session_timeout 10m;
 
     charset utf-8;
-    root /$nuname-server/web/nginx/webside/default;
+    root /${prefixpath}server/web/nginx/webside/default;
     index index.html;
 
     # 错误页面配置
@@ -731,11 +733,11 @@ server {
     # include start-php-81.conf; 
 }
 EOF
-			cat > /$nuname-server/web/nginx/webside/default/index.html << EOF
+			cat > /${prefixpath}server/web/nginx/webside/default/index.html << EOF
 welcome to nuoyis's server
 EOF
-			curl -k -L -o /$nuname-server/web/nginx/server/conf/ssl/default.pem https://lnmp.nuoyis.net/config/ssl/default.pem
-			curl -k -L -o /$nuname-server/web/nginx/server/conf/ssl/default.key https://lnmp.nuoyis.net/config/ssl/default.key
+			curl -k -L -o /${prefixpath}server/web/nginx/server/conf/ssl/default.pem https://lnmp.nuoyis.net/config/ssl/default.pem
+			curl -k -L -o /${prefixpath}server/web/nginx/server/conf/ssl/default.key https://lnmp.nuoyis.net/config/ssl/default.key
 			manager::systemctl start nginx php-fpm mariadb
 }
 
@@ -758,7 +760,7 @@ install::lnmp::gcc(){
     sed -i 's/Server: nginx/Server: nuoyis server/g' ./src/http/ngx_http_header_filter_module.c
     sed -i 's/"Server: " NGINX_VER CRLF/"Server: nuoyis server" CRLF/g' ./src/http/ngx_http_header_filter_module.c
     sed -i 's/"Server: " NGINX_VER_BUILD CRLF/"Server: nuoyis server" CRLF/g' ./src/http/ngx_http_header_filter_module.c
-    ./configure --prefix=/$nuname-server/web/nginx/server \
+    ./configure --prefix=/${prefixpath}server/web/nginx/server \
         --user=web \
 		--group=web \
         --with-compat \
@@ -787,11 +789,11 @@ install::lnmp::gcc(){
         --with-stream_ssl_module \
         --with-stream_ssl_preread_module; \
 	make -j$(nproc) && make install
-	chmod +x /$nuname-server/nginx/server/sbin/nginx
+	chmod +x /${prefixpath}server/nginx/server/sbin/nginx
 	cd ../php-8.4.2
-	./configure --prefix=/$nuname-server/web/php \
+	./configure --prefix=/${prefixpath}server/web/php \
         --disable-shared \
-        --with-config-file-path=/$nuname-server/web/php/etc/ \
+        --with-config-file-path=/${prefixpath}server/web/php/etc/ \
         --with-curl \
         --with-freetype \
         --enable-gd \
@@ -834,28 +836,28 @@ install::lnmp::gcc(){
     make -j$(nproc) && make install
 
 # 文件下载
-curl -k -L -o /$nuname-server/web/nginx/server/conf/head.conf https://lnmp.nuoyis.net/config/head.conf.txt
-curl -k -L -o /$nuname-server/web/nginx/server/conf/nginx.conf https://lnmp.nuoyis.net/config/nginx.conf.txt
-curl -k -L -o /$nuname-server/web/nginx/webside/default/index.html https://lnmp.nuoyis.net/config/index.html
-curl -k -L -o /$nuname-server/web/nginx/server/conf/ssl/default.pem https://lnmp.nuoyis.net/config/ssl/default.pem
-curl -k -L -o /$nuname-server/web/nginx/server/conf/ssl/default.key https://lnmp.nuoyis.net/config/ssl/default.key
-curl -k -L -o /$nuname-server/web/nginx/server/conf/start-php.conf https://lnmp.nuoyis.net/config/start-php-latest.conf.txt
-curl -k -L -o /$nuname-server/web/nginx/server/conf/path.conf https://lnmp.nuoyis.net/config/path.conf.txt
-curl -k -L -o /$nuname-server/web/php/etc/php.ini https://lnmp.nuoyis.net/config/latest-php.ini.txt
-curl -k -L -o /$nuname-server/web/php/etc/php-fpm.d/fpm.conf https://lnmp.nuoyis.net/config/fpm-latest.conf.txt
-curl -k -L -o /$nuname-server/web/nginx/conf/nginx.conf.full.template https://lnmp.nuoyis.net/config/nginx.conf.full.template.txt
-curl -k -L -o /$nuname-server/web/nginx/conf/nginx.conf.succinct.template https://lnmp.nuoyis.net/config/nginx.conf.succinct.template.txt
-curl -k -L -o /$nuname-server/web/nginx/conf/default.conf.init https://lnmp.nuoyis.net/config/default.conf.txt
+curl -k -L -o /${prefixpath}server/web/nginx/server/conf/head.conf https://lnmp.nuoyis.net/config/head.conf.txt
+curl -k -L -o /${prefixpath}server/web/nginx/server/conf/nginx.conf https://lnmp.nuoyis.net/config/nginx.conf.txt
+curl -k -L -o /${prefixpath}server/web/nginx/webside/default/index.html https://lnmp.nuoyis.net/config/index.html
+curl -k -L -o /${prefixpath}server/web/nginx/server/conf/ssl/default.pem https://lnmp.nuoyis.net/config/ssl/default.pem
+curl -k -L -o /${prefixpath}server/web/nginx/server/conf/ssl/default.key https://lnmp.nuoyis.net/config/ssl/default.key
+curl -k -L -o /${prefixpath}server/web/nginx/server/conf/start-php.conf https://lnmp.nuoyis.net/config/start-php-latest.conf.txt
+curl -k -L -o /${prefixpath}server/web/nginx/server/conf/path.conf https://lnmp.nuoyis.net/config/path.conf.txt
+curl -k -L -o /${prefixpath}server/web/php/etc/php.ini https://lnmp.nuoyis.net/config/latest-php.ini.txt
+curl -k -L -o /${prefixpath}server/web/php/etc/php-fpm.d/fpm.conf https://lnmp.nuoyis.net/config/fpm-latest.conf.txt
+curl -k -L -o /${prefixpath}server/web/nginx/conf/nginx.conf.full.template https://lnmp.nuoyis.net/config/nginx.conf.full.template.txt
+curl -k -L -o /${prefixpath}server/web/nginx/conf/nginx.conf.succinct.template https://lnmp.nuoyis.net/config/nginx.conf.succinct.template.txt
+curl -k -L -o /${prefixpath}server/web/nginx/conf/default.conf.init https://lnmp.nuoyis.net/config/default.conf.txt
 
 # 替换为实际路径
-sed -i "s#/web#/$nuname-server/web#g" /$nuname-server/web/nginx/server/conf/nginx.conf
-sed -i "s#/web/nginx#/$nuname-server/web/nginx#g" /$nuname-server/web/nginx/conf/default.conf.init
-sed -i "s#/web#/$nuname-server/web#g" /$nuname-server/web/php/etc/php-fpm.d/fpm.conf
-sed -i "s#/web#/$nuname-server/web#g" /$nuname-server/web/php/etc/php.ini
-sed -i -e "s#/web/nginx#/$nuname-server/web/nginx#g" -e "s#/web/logs#/$nuname-server/web/logs#g" /$nuname-server/web/nginx/conf/nginx.conf.full.template
-sed -i -e "s#/web/nginx#/$nuname-server/web/nginx#g" -e "s#/web/logs#/$nuname-server/web/logs#g" /$nuname-server/web/nginx/conf/nginx.conf.succinct.template
+sed -i "s#/web#/${prefixpath}server/web#g" /${prefixpath}server/web/nginx/server/conf/nginx.conf
+sed -i "s#/web/nginx#/${prefixpath}server/web/nginx#g" /${prefixpath}server/web/nginx/conf/default.conf.init
+sed -i "s#/web#/${prefixpath}server/web#g" /${prefixpath}server/web/php/etc/php-fpm.d/fpm.conf
+sed -i "s#/web#/${prefixpath}server/web#g" /${prefixpath}server/web/php/etc/php.ini
+sed -i -e "s#/web/nginx#/${prefixpath}server/web/nginx#g" -e "s#/web/logs#/${prefixpath}server/web/logs#g" /${prefixpath}server/web/nginx/conf/nginx.conf.full.template
+sed -i -e "s#/web/nginx#/${prefixpath}server/web/nginx#g" -e "s#/web/logs#/${prefixpath}server/web/logs#g" /${prefixpath}server/web/nginx/conf/nginx.conf.succinct.template
 
-ln -s /$nuname-server/web/nginx/server/sbin/nginx /usr/local/bin/
+ln -s /${prefixpath}server/web/nginx/server/sbin/nginx /usr/local/bin/
 cat > /etc/systemd/system/nginx.service <<EOF
 [Unit]
 Description=Nginx HTTP Server
@@ -878,9 +880,9 @@ install::lnmp::docker(){
 	if [ -z $options_mariadb_value ];then
 		read -e -p "请输入mariadb root密码:" options_mariadb_value
     fi
-	touch /$nuname-server/docker-yaml/docker-lnmp.yaml
-	touch /$nuname-server/web/mariadb/config/my.cnf
-	cat > /$nuname-server/docker-yaml/docker-lnmp.yaml << EOF
+	touch /${prefixpath}server/docker-yaml/docker-lnmp.yaml
+	touch /${prefixpath}server/web/mariadb/config/my.cnf
+	cat > /${prefixpath}server/docker-yaml/docker-lnmp.yaml << EOF
 services:
   lnmp-np:
     container_name: lnmp-np
@@ -895,21 +897,21 @@ services:
       - 443:443/udp
     volumes:
       # nginx 配置文件
-      - /$nuname-server/web/nginx/conf:/web/nginx/conf
+      - /${prefixpath}server/web/nginx/conf:/web/nginx/conf
       # nginx 网站目录
-      - /$nuname-server/web/nginx/webside:/web/nginx/webside
+      - /${prefixpath}server/web/nginx/webside:/web/nginx/webside
       # nginx ssl
-      - /$nuname-server/web/nginx/ssl:/web/nginx/ssl
+      - /${prefixpath}server/web/nginx/ssl:/web/nginx/ssl
       # Log 目录
       - /var/log/web:/web/logs
 EOF
 	if [[ $options_nas == 1 ]];then
-		cat >> /$nuname-server/docker-yaml/docker-lnmp.yaml << EOF
+		cat >> /${prefixpath}server/docker-yaml/docker-lnmp.yaml << EOF
       # nas file
       - /nuoyis-server/sharefile:/web/sharefile
 EOF
 	fi
-	cat >> /$nuname-server/docker-yaml/docker-lnmp.yaml << EOF
+	cat >> /${prefixpath}server/docker-yaml/docker-lnmp.yaml << EOF
     environment:
       TIME_ZONE: Asia/Shanghai
     healthcheck:
@@ -932,10 +934,10 @@ EOF
       TIME_ZONE: Asia/Shanghai
       MYSQL_ROOT_PASSWORD: "$options_mariadb_value"
     volumes:
-      - /$nuname-server/web/mariadb/init:/docker-entrypoint-initdb.d
-      - /$nuname-server/web/mariadb/server:/var/lib/mysql
-      - /$nuname-server/web/mariadb/import:/web/mariadb/import
-      - /$nuname-server/web/mariadb/config/my.cnf:/etc/mysql/my.cnf
+      - /${prefixpath}server/web/mariadb/init:/docker-entrypoint-initdb.d
+      - /${prefixpath}server/web/mariadb/server:/var/lib/mysql
+      - /${prefixpath}server/web/mariadb/import:/web/mariadb/import
+      - /${prefixpath}server/web/mariadb/config/my.cnf:/etc/mysql/my.cnf
     ports:
       - 3306:3306
     shm_size: '1g'
@@ -957,7 +959,7 @@ networks:
         - subnet: 192.168.223.0/24
           gateway: 192.168.223.1
 EOF
-	cat > /$nuname-server/web/mariadb/config/my.cnf << EOF
+	cat > /${prefixpath}server/web/mariadb/config/my.cnf << EOF
 [mysqld]
 server-id=1
 log_bin=mysql-bin
@@ -966,7 +968,7 @@ slave_skip_errors=1062
 EOF
     docker rm -f lnmp-np
 	docker rm -f lnmp-mariadb
-    docker-compose -f /$nuname-server/docker-yaml/docker-lnmp.yaml up -d
+    docker-compose -f /${prefixpath}server/docker-yaml/docker-lnmp.yaml up -d
 }
 
 install::lnmp(){
@@ -988,14 +990,14 @@ install::lnmp(){
 	fi
 	id -u web >/dev/null 2>&1
 	if [ $? -eq 1 ];then
-		mkdir -p /$nuname-server/web/{logs/nginx,nginx/{server/conf/ssl,conf,webside/default,ssl},mariadb/{init,server,import,config}}
-		touch /$nuname-server/web/logs/nginx/{error.log,nginx.pid}
+		mkdir -p /${prefixpath}server/web/{logs/nginx,nginx/{server/conf/ssl,conf,webside/default,ssl},mariadb/{init,server,import,config}}
+		touch /${prefixpath}server/web/logs/nginx/{error.log,nginx.pid}
 		useradd -u 2233 -m -s /sbin/nologin web
 		groupadd web-share
 		usermod -aG web-share nginx
 		usermod -aG web-share web
-		chown -R root:web-share /$nuname-server/web/nginx/
-		chmod -R 2775 /$nuname-server/web/nginx/
+		chown -R root:web-share /${prefixpath}server/web/nginx/
+		chmod -R 2775 /${prefixpath}server/web/nginx/
 	fi
 	if [ $options_lnmp_value == "yum" ];then
 		install::lnmp::quick
@@ -1026,33 +1028,33 @@ conf::reposource::yum(){
 		fi
 		if [ $system_version -eq 8 ];then
 			gpgcheck="0"
-			cat >> /etc/yum.repos.d/$nuname.repo << EOF
+			cat >> /etc/yum.repos.d/toolbox.repo << EOF
 [highavailability]
-name=${nuname} - HighAvailability
+name=${prefixmirror}HighAvailability
 baseurl=https://${yumurl}/${osname}/\$releasever/HighAvailability/\$basearch/os/
 gpgcheck=${gpgcheck}
 enabled=1
 
 [extras]
-name=${nuname} - Extras
+name=${prefixmirror}Extras
 baseurl=https://${yumurl}/${osname}/\$releasever/extras/\$basearch/os/
 gpgcheck=${gpgcheck}
 enabled=1
 
 [PowerTools]
-name=${nuname} - PowerTools
+name=${prefixmirror}PowerTools
 baseurl=https://${yumurl}/${osname}/\$releasever/PowerTools/\$basearch/os/
 gpgcheck=${gpgcheck}
 enabled=1
 
 [extras]
-name=${nuname} - Extras
+name=${prefixmirror}Extras
 baseurl=https://${yumurl}/${osname}/\$releasever/extras/\$basearch/os/
 gpgcheck=${gpgcheck}
 enabled=1
 
 [centosplus]
-name=${nuname} - centosplus
+name=${prefixmirror}centosplus
 baseurl=https://${yumurl}/${osname}/\$releasever/centosplus/\$basearch/os/
 gpgcheck=${gpgcheck}
 enabled=1
@@ -1060,9 +1062,9 @@ EOF
 		else
 			gpgcheck="1"
 			gpgkey="gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever"
-			cat >> /etc/yum.repos.d/$nuname.repo << EOF
-[${nuname}-baseos-debuginfo]
-name=${nuname} - BaseOS - Debug
+			cat >> /etc/yum.repos.d/toolbox.repo << EOF
+[${prefix}-baseos-debuginfo]
+name=${prefixmirror}BaseOS - Debug
 baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/\$basearch/debug/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
@@ -1071,8 +1073,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${nuname}-baseos-source]
-name=${nuname} - BaseOS - Source
+[${prefix}-baseos-source]
+name=${prefixmirror}BaseOS - Source
 baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/source/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
@@ -1081,8 +1083,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${nuname}-appstream-debuginfo]
-name=${nuname} - AppStream - Debug
+[${prefix}-appstream-debuginfo]
+name=${prefixmirror}AppStream - Debug
 baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/\$basearch/debug/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
@@ -1091,8 +1093,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${nuname}-appstream-source]
-name=${nuname} - AppStream - Source
+[${prefix}-appstream-source]
+name=${prefixmirror}AppStream - Source
 baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/source/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
@@ -1101,8 +1103,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${nuname}-crb]
-name=${nuname} - CRB
+[${prefix}-crb]
+name=${prefixmirror}CRB
 baseurl=https://${yumurl}/${osname}/\$releasever/CRB/\$basearch/os/
 gpgcheck=${gpgcheck}
 ${gpgkey}
@@ -1111,8 +1113,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${nuname}-crb-debuginfo]
-name=${nuname} - CRB - Debug
+[${prefix}-crb-debuginfo]
+name=${prefixmirror}CRB - Debug
 baseurl=https://${yumurl}/${osname}/\$releasever/CRB/\$basearch/debug/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
@@ -1121,8 +1123,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${nuname}-crb-source]
-name=${nuname} - CRB - Source
+[${prefix}-crb-source]
+name=${prefixmirror}CRB - Source
 baseurl=https://${yumurl}/${osname}/\$releasever/CRB/source/tree/
 gpgcheck=${gpgcheck}
 ${gpgkey}
@@ -1132,9 +1134,9 @@ metadata_expire=6h
 priority=1
 EOF
 		fi
-    	cat >> /etc/yum.repos.d/$nuname.repo << EOF
-[${nuname}-BaseOS]
-name=${nuname} - BaseOS
+    	cat >> /etc/yum.repos.d/toolbox.repo << EOF
+[${prefix}-BaseOS]
+name=${prefixmirror}BaseOS
 baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/\$basearch/os/
 gpgcheck=${gpgcheck}
 ${gpgkey}
@@ -1143,8 +1145,8 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${nuname}-appstream]
-name=${nuname} - AppStream
+[${prefix}-appstream]
+name=${prefixmirror}AppStream
 baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/\$basearch/os/
 gpgcheck=${gpgcheck}
 ${gpgkey}
@@ -1584,14 +1586,14 @@ install::main(){
 	HOSTNAME_CHECK=$(cat /etc/hostname)
 	if [ -z $HOSTNAME_CHECK ];then
 		echo "当前主机名hostname为空，设置默认hostname"
-		hostnamectl set-hostname $nuname-init-shell
+		hostnamectl set-hostname ${prefix}init-shell
 	fi
 
 	echo "创建临时服务部署文件夹nuoyis-install"
 	mkdir -p /nuoyis-install
 
-	echo "创建$nuname 服务核心文件夹"
-	mkdir -p /$nuname-server/{logs,shell}
+	echo "创建${prefix}服务核心文件夹"
+	mkdir -p /${prefixpath}server/{logs,shell}
 
 	echo "安装核心软件包"
 	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
@@ -1746,7 +1748,7 @@ while [[ $# -gt 0 ]]; do
 			shift
 			;;
         -n|--name)
-            nuname=$2
+            prefix=$2
             shift 2
             ;;
         -host|--hostname)

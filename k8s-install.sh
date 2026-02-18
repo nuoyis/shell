@@ -21,7 +21,7 @@ MIN_VERSION="1.19.0"
 MAX_VERSION=$(curl -sk "https://version.nuoyis.net/json/kubernetes.json" | grep -o '"versions"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*: *"//;s/"$//');
 # 如果获取失败或为空，使用默认值
 if [ -z "$MAX_VERSION" ]; then
-    MAX_VERSION="1.34.0"
+    MAX_VERSION="1.35.1"
 fi
 k8sversion="$MAX_VERSION"
 compare_versions() {
@@ -78,9 +78,9 @@ install::version() {
 }
 
 install::kubernetes(){
-    touch /etc/yum.repos.d/kubernetes.repo
+    touch /etc/yum.repos.d/toolbox-kubernetes.repo
     if [ $(install::version $k8sversion) -eq 0 ]; then
-        cat > /etc/yum.repos.d/kubernetes.repo << 'EOF'
+        cat > /etc/yum.repos.d/toolbox-kubernetes.repo << 'EOF'
 [kubernetes]
 name=Kubernetes
 baseurl=https://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64/
@@ -88,7 +88,7 @@ enabled=1
 gpgcheck=0
 EOF
     else
-        cat > /etc/yum.repos.d/kubernetes.repo << EOF
+        cat > /etc/yum.repos.d/toolbox-kubernetes.repo << EOF
 [kubernetes]
 name=Kubernetes
 baseurl=https://mirrors.aliyun.com/kubernetes-new/core/stable/v$(echo "$k8sversion" | cut -d'.' -f1,2)/rpm/
@@ -311,12 +311,18 @@ conf::kubernetes(){
 		sleep 5
 		KUBE_MINOR=$(echo "$k8sversion" | awk -F. '{print $2}')
         if [ "$KUBE_MINOR" -lt 21 ]; then
-            echo "Kubernetes $k8sversion (<1.21)，安装k8s后部署 Calico v3.19"
+            echo "($k8sversion<1.21)，安装k8s后部署 Calico v3.19"
             wget -O calico.yaml "https://docs.projectcalico.org/archive/v3.19/manifests/calico.yaml"
 			sed -i 's#docker.io/##g' calico.yaml
         else
-            echo "Kubernetes $k8sversion (>=1.21)，安装k8s后部署最新 Calico"
-			wget -O calico.yaml "https://ghfast.top/https://raw.githubusercontent.com/projectcalico/calico/refs/heads/master/manifests/calico.yaml"
+            if [ $KUBE_MINOR -lt 31 ]; then
+                echo "(1.31>=$k8sversion>=1.21)，安装k8s后部署次新 Calico"
+                calicoversion="https://docs.projectcalico.org/archive/v3.24/manifests/calico.yaml"
+            else
+                echo "($k8sversion>=1.31)，安装k8s后部署最新 Calico"
+                calicoversion="https://ghfast.top/https://raw.githubusercontent.com/projectcalico/calico/master/manifests/calico.yaml"
+            fi
+			wget -O calico.yaml $calicoversion
 			sed -i -e '/# - name: CALICO_IPV4POOL_CIDR/{
 N
 N
@@ -342,43 +348,43 @@ c\
 }
 
 install::otherserver(){
-join_cmd=$(kubeadm token create --print-join-command | grep "kubeadm")
-echo "$join_cmd" > kubernetes-node-join.sh
-echo "$join_cmd --control-plane --ignore-preflight-errors=SystemVerification" > kubernetes-master-join.sh
-all_ips=("${mastersip[@]:1}" "${nodesip[@]}")
-nodenumber=1
-vipid=90
-for nodeip in "${all_ips[@]}"; do
-    is_master=false
-    for m_ip in "${mastersip[@]}"; do
-        if [[ "$nodeip" == "$m_ip" ]]; then
-            is_master=true
-            break
-        fi
-    done
+    join_cmd=$(kubeadm token create --print-join-command | grep "kubeadm")
+    echo "$join_cmd" > kubernetes-node-join.sh
+    echo "$join_cmd --control-plane --ignore-preflight-errors=SystemVerification" > kubernetes-master-join.sh
+    all_ips=("${mastersip[@]:1}" "${nodesip[@]}")
+    nodenumber=1
+    vipid=90
+    for nodeip in "${all_ips[@]}"; do
+        is_master=false
+        for m_ip in "${mastersip[@]}"; do
+            if [[ "$nodeip" == "$m_ip" ]]; then
+                is_master=true
+                break
+            fi
+        done
 
-	sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "rm -rf /k8s-install.sh"
-    sshpass -p "$passwd" scp -o StrictHostKeyChecking=no k8s-install.sh root@$nodeip:/
-    if $is_master; then
-        sshpass -p "$passwd" scp -o StrictHostKeyChecking=no kubernetes-master-join.sh root@$nodeip:/kubernetes-master-join.sh
-    else
-        sshpass -p "$passwd" scp -o StrictHostKeyChecking=no kubernetes-node-join.sh root@$nodeip:/kubernetes-node-join.sh
-    fi
-
-    kernel_version=$(sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no "root@$nodeip" "uname -r | cut -d- -f1")
-    echo "当前部署节点 $nodenumber IP: $nodeip 当前内核版本: $kernel_version"
-
-    if [ $(install::version $k8sversion) -eq 1 ]; then
-        if printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$kernel_version" | sort -V -C; then
-            echo "内核版本满足要求，开始安装"
+    	sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "rm -rf /k8s-install.sh"
+        sshpass -p "$passwd" scp -o StrictHostKeyChecking=no k8s-install.sh root@$nodeip:/
+        if $is_master; then
+            sshpass -p "$passwd" scp -o StrictHostKeyChecking=no kubernetes-master-join.sh root@$nodeip:/kubernetes-master-join.sh
         else
-            echo "内核版本过低，开始升级并重启"
+            sshpass -p "$passwd" scp -o StrictHostKeyChecking=no kubernetes-node-join.sh root@$nodeip:/kubernetes-node-join.sh
         fi
-    fi
-    sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "bash /k8s-install.sh --master $master_value --node $node_value --password $passwd --bashdevice $( $is_master && echo master || echo node ) --version $k8sversion"  
-    if $is_master; then
-        sshpass -p "$passwd" scp -o StrictHostKeyChecking=no /etc/nginx/nginx.conf root@$nodeip:/etc/nginx/nginx.conf
-        sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "cat > /etc/keepalived/keepalived.conf << EOF
+
+        kernel_version=$(sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no "root@$nodeip" "uname -r | cut -d- -f1")
+        echo "当前部署节点 $nodenumber IP: $nodeip 当前内核版本: $kernel_version"
+
+        if [ $(install::version $k8sversion) -eq 1 ]; then
+            if printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$kernel_version" | sort -V -C; then
+                echo "内核版本满足要求，开始安装"
+            else
+                echo "内核版本过低，开始升级并重启"
+            fi
+        fi
+        sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "bash /k8s-install.sh --master $master_value --node $node_value --password $passwd --bashdevice $( $is_master && echo master || echo node ) --version $k8sversion"  
+        if $is_master; then
+            sshpass -p "$passwd" scp -o StrictHostKeyChecking=no /etc/nginx/nginx.conf root@$nodeip:/etc/nginx/nginx.conf
+            sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "cat > /etc/keepalived/keepalived.conf << EOF
 global_defs {
    notification_email { 
      acassen@firewall.loc 
@@ -406,23 +412,23 @@ vrrp_instance VI_1 {
     }
 }
 EOF"
-        sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "systemctl enable --now keepalived"
-        vipid=$(($vipid-10))
-    fi
-    if [ $(install::version $k8sversion) -eq 1 ]; then
-        if ! printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$kernel_version" | sort -V -C; then
-            echo "等待 $nodeip 重启..."
-            sleep 70
-            while ! ping -c 1 -W 1 "$nodeip" >/dev/null 2>&1; do
-                echo "等待 $nodeip 开机中..."
-                sleep 3
-            done
-            echo "重新执行安装脚本"
-            sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "bash /k8s-install.sh --master $master_value --node $node_value --password $passwd --bashdevice $( $is_master && echo master || echo node ) --version $k8sversion"
+            sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "systemctl enable --now keepalived"
+            vipid=$(($vipid-10))
         fi
-    fi
-    nodenumber=$((nodenumber + 1))
-done
+        if [ $(install::version $k8sversion) -eq 1 ]; then
+            if ! printf "%s\n%s\n" "$MIN_KERNEL_VERSION" "$kernel_version" | sort -V -C; then
+                echo "等待 $nodeip 重启..."
+                sleep 70
+                while ! ping -c 1 -W 1 "$nodeip" >/dev/null 2>&1; do
+                    echo "等待 $nodeip 开机中..."
+                    sleep 3
+                done
+                echo "重新执行安装脚本"
+                sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$nodeip "bash /k8s-install.sh --master $master_value --node $node_value --password $passwd --bashdevice $( $is_master && echo master || echo node ) --version $k8sversion"
+            fi
+        fi
+        nodenumber=$((nodenumber + 1))
+    done
 }
 
 install::init(){
@@ -562,18 +568,43 @@ else
     for ip in $(hostname -I); do
         if [[ "$ip" == "${mastersip[0]}" ]]; then
             is_first_master=true
-        break
+            # 新改并行安装方法
+            echo "正在并行安装，请在/var/log/toolbox-kubernetes内查看部署日志"
+            echo "等待并行安装完成"
+            mkdir -p /var/log/toolbox-kubernetes
+            all_ips=("${mastersip[@]}" "${nodesip[@]}")
+            for initip in "${all_ips[@]}"; do
+                {
+                sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh"
+                sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "chmod +x /usr/bin/nuoyis-toolbox"
+                sshpass -p "$passwd" ssh -o StrictHostKeyChecking=no root@$initip "nuoyis-toolbox -r aliyun -do" >> "/var/log/toolbox-kubernetes/${initip}.log" 2>&1
+                } &
+                pid=$!
+                pids+=($pid)
+                pid_host[$pid]=$initip
+            done
+            for pid in "${pids[@]}"; do
+                wait $pid
+                if [ $? -ne 0 ]; then
+                echo "${pid_host[$pid]}安装失败"
+                ((fail_count++))
+                fi
+            done
+            break
         fi
     done
-    curl -sSk -o /usr/bin/nuoyis-toolbox https://shell.nuoyis.net/nuoyis-linux-toolbox.sh
-    chmod +x /usr/bin/nuoyis-toolbox
-    nuoyis-toolbox -r aliyun -do
+
+    # k8s 安装初始化
     install::init
+
+    # 与toolbox冲突部分更换稳定版本
     if [ $(install::version $k8sversion) -eq 0 ]; then
         # 删除toolbox内下载的最新版本
         yum remove -y docker-ce docker-ce-cli docker-ce-rootless-extras docker-buildx-plugin docker-compose-plugin -y
         yum install docker-ce-19.03.15 docker-ce-cli-19.03.15 -y
     fi
+
+    # k8s 安装
     install::kubernetes
     if [ $(install::version $k8sversion) -eq 1 ]; then
         if [ $system_version == "7" ];then
