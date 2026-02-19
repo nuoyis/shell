@@ -2,7 +2,6 @@
 # Script Name    : nuoyis toolbox
 # Description    : Linux quick initialization and installation
 # Create Date    : 2025-04-23
-# Update Date    : 2025-09-16
 # auth           : nuoyis
 # Webside        : blog.nuoyis.net
 # debug          : bash nuoyis-toolbox -host aliyun -r edu -ln docker -doa -na -mp test666 -ku -tu
@@ -13,11 +12,9 @@ PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
 # 语言设置
 LANG=en_US.UTF-8
-# 变量初始化区域
+#### 变量初始化区域 ####
 prefix=""
 mirror_update=0
-prefixmirror=${prefix:+$prefix - }
-prefixpath=${prefix:+$prefix-}
 options_yum=0
 options_lnmp=0
 options_tuning=0
@@ -29,7 +26,6 @@ options_nas=0
 options_ollama=0
 options_bt=0
 
-#### 自动获取变量区域 ####
 # 脚本执行时间统计
 startTime=`date +%Y%m%d-%H:%M:%S`
 startTime_s=`date +%s`
@@ -48,6 +44,15 @@ if [[ ! -f /root/.toolbox-install-init.lock ]]; then
 else
 	installlock=1
 fi
+# 脚本使用代理站源判断
+if ping -c1 -W1 google.com >/dev/null 2>&1; then
+    server_location="overseas"
+elif ping -c1 -W1 www.baidu.com >/dev/null 2>&1; then
+	server_location="cn"
+else
+	server_location="overseas"
+fi
+echo "判断服务器位置为:$server_location"
 # vsftpd配置
 if [ $system_name == "Debian" ] || [ $system_name == "Ubuntu" ];then
 	vsftpdfile="/etc/vsftpd.conf"
@@ -532,7 +537,11 @@ install::docker(){
 	mkdir -p /${prefixpath}server/docker-yaml/
 	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
 		manager::repositories install yum-utils device-mapper-persistent-data lvm2
-		manager::repositories repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+		if [[ "$server_location" == "cn" ]];then
+			manager::repositories repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+		else
+			manager::repositories repoadd https://download.docker.com/linux/rhel/docker-ce.repo
+		fi
 		sed -i 's+download.docker.com+mirrors.aliyun.com/docker-ce+' /etc/yum.repos.d/docker-ce.repo
 		if [ $system_name == "openEuler" ];then
 			sed -i 's+$releasever+8+'  /etc/yum.repos.d/docker-ce.repo
@@ -540,9 +549,13 @@ install::docker(){
 		manager::repositories makecache
 	else
 		install -m 0755 -d /etc/apt/keyrings
-		curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/${system_name,,}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+		if [[ "$server_location" == "cn" ]];then
+			curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/${system_name,,}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+			echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.cernet.edu.cn/docker-ce/linux/${system_name,,} $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+		else
+			curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.gpg
+		fi
 		chmod a+r /etc/apt/keyrings/docker.gpg
-		echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.cernet.edu.cn/docker-ce/linux/${system_name,,} $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
 		manager::repositories update
 	fi
 	manager::repositories install docker-ce docker-ce-cli containerd.io docker-compose-plugin
@@ -550,11 +563,29 @@ install::docker(){
 	touch /etc/docker/daemon.json
 	cat > /etc/docker/daemon.json << EOF
 {
-  "registry-mirrors": [
+EOF
+	if [[ "$server_location" == "cn" ]];then
+		cat >> /etc/docker/daemon.json << EOF
+	"registry-mirrors": [
+EOF
+		if [ -n $options_docker_xuanyuanpro_key ];then
+			cat >> /etc/docker/daemon.json << EOF
+	"https://docker.xuanyuan.run",
+EOF
+		fi
+		if [ -n $options_docker_xuanyuanpro_url ];then
+			cat >> /etc/docker/daemon.json << EOF
+	"$options_docker_xuanyuanpro_url",
+EOF
+		fi
+		cat >> /etc/docker/daemon.json << EOF
     "https://docker.xuanyuan.me",
 	"https://docker.m.daocloud.io",
     "https://docker66ccff.lovablewyh.eu.org"
   ],
+EOF
+	fi
+	cat >> /etc/docker/daemon.json << EOF
   "bip": "192.168.100.1/24",
   "default-address-pools": [
     {
@@ -568,7 +599,11 @@ EOF
 	if [ -f "/usr/bin/docker-compose" ];then
 		echo "docker-compose 二进制文件已存在"
 	else
-		curl -kL "https://openlist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/docker-compose/docker-compose-linux-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
+		if [[ "$server_location" == "cn" ]];then
+			curl -kL "https://openlist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/docker-compose/docker-compose-linux-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
+		else
+			curl -kL "https://github.com/docker/compose/releases/download/v5.0.1/docker-compose-linux-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
+		fi
 	fi
 }
 
@@ -1710,6 +1745,13 @@ done
 exit 0
 }
 
+# root判断
+echo "检测是否是root用户"
+if [ $whois != "root" ];then
+	echo "非root用户，无法满足初始化需求"
+	exit 1
+fi
+#### 参数解析生成区域 ####
 [ "$#" == "0" ] && show::help
 
 # 参数解析
@@ -1774,8 +1816,9 @@ while [[ $# -gt 0 ]]; do
                 echo "unknown volume: $2"
                 show::help
                 exit 1
-            fi
-            options_lnmp_value=$2
+            elif [ "$2" == "docker" ];then
+				options_docker=1
+			fi
             options_lnmp=1
             # install::lnmp
             shift 2
@@ -1802,6 +1845,15 @@ while [[ $# -gt 0 ]]; do
             options_docker=1
             shift
             ;;
+		-xyl|--xuanyuanlogin)
+			options_docker_xuanyuanpro_username=$3
+			options_docker_xuanyuanpro_password=$3
+			shift 3
+			;;
+		-xyu|--xuanyuanurl)
+			options_docker_xuanyuanpro_url=$2
+			shift 2
+			;;
         -doa|--dockerapp)
             # install::docker
             options_docker_app=1
@@ -1810,6 +1862,8 @@ while [[ $# -gt 0 ]]; do
         -na|--nas)
             # install::nas
             options_nas=1
+			options_lnmp=1
+			options_lnmp_value=gcc
             shift
             ;;
         -oll|--ollama)
@@ -1847,88 +1901,52 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# root判断
-echo "检测是否是root用户"
-if [ $whois != "root" ];then
-	echo "非root用户，无法满足初始化需求"
-	exit 1
-fi
+prefixmirror=${prefix:+$prefix - }
+prefixpath=${prefix:+$prefix-}
 
-# 检查是否已有 swap 文件存在
-swap_file=$(swapon --show=NAME | grep -E '/toolbox-swap')
-
-if [ -n "$swap_file" ];then
-	echo "虚拟内存已存在"
-else
-    memory=`free -m | awk '/^Mem:/ {print $2}'`
-    if [ $memory -lt 1024 ] || [ $options_swap -eq 1 ];then
-        echo "设置虚拟内存"
-        if [ -z $options_swap_value ];then
-            swapsize=$[1024*2];
-        else
-            swapsize=$options_swap_value
-        fi
-            cat > /etc/sysctl.conf << EOF
-$(egrep -v '^vm.swappiness' /etc/sysctl.conf)
-EOF
-        echo "vm.swappiness=60" >> /etc/sysctl.conf
-        dd if=/dev/zero of=/toolbox-swap bs=1M count=$swapsize
-        chmod 0600 /toolbox-swap
-        mkswap -f /toolbox-swap
-        swapon /toolbox-swap
-        echo "/toolbox-swap    swap    swap    defaults    0 0" >> /etc/fstab
-        mount -a
-        sysctl -p
-    fi
-fi
-
-# 下面开始依据变量值执行函数
-if [[ $options_yum -eq 1 ]]; then
-  conf::reposource
-fi
+#### 执行函数区域 ####
+[[ $options_yum -eq 1 ]] && conf::reposource
 
 if [[ $installlock -eq 0 ]]; then
 	touch /root/.toolbox-install-init.lock
+	# 检查是否已有 swap 文件存在
+	swap_file=$(swapon --show=NAME | grep -E '/toolbox-swap')
+
+	if [ -n "$swap_file" ];then
+		echo "虚拟内存已存在"
+	else
+	    memory=`free -m | awk '/^Mem:/ {print $2}'`
+	    if [ $memory -lt 1024 ] || [ $options_swap -eq 1 ];then
+	        echo "设置虚拟内存"
+	        if [ -z $options_swap_value ];then
+	            swapsize=$[1024*2];
+	        else
+	            swapsize=$options_swap_value
+	        fi
+	            cat > /etc/sysctl.conf << EOF
+$(egrep -v '^vm.swappiness' /etc/sysctl.conf)
+EOF
+	        echo "vm.swappiness=60" >> /etc/sysctl.conf
+	        dd if=/dev/zero of=/toolbox-swap bs=1M count=$swapsize
+	        chmod 0600 /toolbox-swap
+	        mkswap -f /toolbox-swap
+	        swapon /toolbox-swap
+	        echo "/toolbox-swap    swap    swap    defaults    0 0" >> /etc/fstab
+	        mount -a
+	        sysctl -p
+	    fi
+	fi
 	install::main
 fi
 
-if [[ $options_bt -eq 1 ]]; then
-	install::bt
-fi
+[[ $options_bt -eq 1 ]] && install::bt
+[[ $options_kernel_update -eq 1 ]] && install::kernel
+[[ $options_tuning -eq 1 ]] && conf::tuning
+[[ $options_docker -eq 1 ]] && install::docker
+[[ $options_docker_app -eq 1 ]] && install::dockerapp
+[[ $options_lnmp -eq 1 ]] && install::lnmp
+[[ $options_ollama -eq 1 ]] && install::ollama
+[[ $options_nas -eq 1 ]] && install::nas
 
-if [[ $options_kernel_update -eq 1 ]]; then
-	install::kernel
-fi
-
-if [[ $options_tuning -eq 1 ]]; then
-	conf::tuning
-fi
-
-if [[ $options_lnmp -eq 1 ]]; then
-	if [ $options_lnmp_value == "docker" ];then
-		install::docker
-	fi
-	install::lnmp
-fi
-
-if [[ $options_docker -eq 1 ]]; then
-	install::docker
-fi
-
-if [[ $options_docker_app -eq 1 ]]; then
-	install::dockerapp
-fi
-
-if [[ $options_nas -eq 1 ]]; then
-	if [ $options_lnmp -ne 1 ];then
-  		options_lnmp_value=gcc
-		install::lnmp
-	fi
-	install::nas
-fi
-
-if [[ $options_ollama -eq 1 ]]; then
-	install::ollama
-fi
-
+# 销毁脚本安装时创建目录
 rm -rf /nuoyis-install
