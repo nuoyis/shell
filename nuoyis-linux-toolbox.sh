@@ -305,10 +305,12 @@ install::nas(){
     sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
     useradd nas
     mkdir -p /${prefixpath}server/sharefile
-    chown -R nas:nas /${prefixpath}server/sharefile
+    # chown -R nas:nas /${prefixpath}server/sharefile
     chown root:nas /${prefixpath}server/sharefile
     chmod -R 775 /${prefixpath}server/sharefile
-    # chmod g+s /${prefixpath}server/sharefile
+    chmod g+s /${prefixpath}server/sharefile
+	sed -i '/root/d' /etc/vsftpd/user_list
+	sed -i '/root/d' /etc/vsftpd//ftpusers
     # 额外配置
     manager::repositories install vsftpd samba
 
@@ -322,24 +324,23 @@ install::nas(){
 	fi
     cat > $vsftpdfile << EOF
 # 不以独立模式运行
-listen=NO
+listen=YES
 # 支持 IPV6，如不开启 IPV4 也无法登录
-listen_ipv6=YES
+# listen_ipv6=NO
 
 # 匿名用户登录
-anonymous_enable=YES
-no_anon_password=YES
+anonymous_enable=NO
+#anonymous_enable=YES
+#no_anon_password=YES
 # 允许匿名用户上传文件
-anon_upload_enable=YES
+#anon_upload_enable=YES
 # 允许匿名用户新建文件夹
-anon_mkdir_write_enable=YES
+#anon_mkdir_write_enable=YES
 # 匿名用户删除文件和重命名文件
-anon_other_write_enable=YES
+#anon_other_write_enable=YES
 # 匿名用户的掩码（022 的实际权限为 666-022=644）
-anon_umask=022
-anon_root=/${prefixpath}server/sharefile
-chown_uploads=YES
-chown_username=nas
+# anon_umask=022
+# anon_root=/${prefixpath}server/sharefile
 
 # 系统用户登录
 local_enable=YES
@@ -351,6 +352,8 @@ chroot_list_enable=YES
 chroot_list_file=/etc/vsftpd/chroot_list
 # 对文件具有写权限，否则无法上传
 write_enable=YES
+chown_uploads=YES
+chown_username=nas
 
 max_clients=0
 max_per_ip=0
@@ -407,7 +410,7 @@ cat > /etc/samba/smb.conf <<EOF
         path = /${prefixpath}server/sharefile
 		browsable = yes
 		writable = yes
-		guest ok = yes
+		#guest ok = yes
 		force user = nas
 		force group = nas
 		create mask = 0775
@@ -561,40 +564,26 @@ install::docker(){
 	manager::repositories install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 	mkdir -p /etc/docker
 	touch /etc/docker/daemon.json
-	cat > /etc/docker/daemon.json << EOF
-{
-EOF
-	if [[ "$server_location" == "cn" ]];then
-		cat >> /etc/docker/daemon.json << EOF
-	"registry-mirrors": [
-EOF
-		if [ -n $options_docker_xuanyuanpro_key ];then
-			cat >> /etc/docker/daemon.json << EOF
-	"https://docker.xuanyuan.run",
-EOF
-		fi
-		if [ -n $options_docker_xuanyuanpro_url ];then
-			cat >> /etc/docker/daemon.json << EOF
-	"$options_docker_xuanyuanpro_url",
-EOF
-		fi
-		cat >> /etc/docker/daemon.json << EOF
-    "https://docker.xuanyuan.me",
-	"https://docker.m.daocloud.io",
-    "https://docker66ccff.lovablewyh.eu.org"
-  ],
-EOF
+	mirrors=()
+	if [[ "$server_location" == "cn" ]]; then
+    	[ -n "$options_docker_xuanyuanpro_password" ] && mirrors+=("https://docker.xuanyuan.run") && docker login -u $options_docker_xuanyuanpro_username -p $options_docker_xuanyuanpro_password docker.xuanyuan.run
+    	[ -n "$options_docker_xuanyuanpro_url" ] && mirrors+=("$options_docker_xuanyuanpro_url")
+    	mirrors+=("https://docker.xuanyuan.me")
+    	mirrors+=("https://docker.m.daocloud.io")
+    	mirrors+=("https://docker66ccff.lovablewyh.eu.org")
 	fi
-	cat >> /etc/docker/daemon.json << EOF
-  "bip": "192.168.100.1/24",
-  "default-address-pools": [
-    {
-      "base": "192.168.100.0/16",
-      "size": 24
-    }
-  ]
-}
-EOF
+	json=$(jq -n \
+	    --arg bip "192.168.100.1/24" \
+	    --argjson mirrors "$(printf '%s\n' "${mirrors[@]}" | jq -R . | jq -s .)" \
+	    '{
+	        "bip": $bip,
+	        "default-address-pools": [
+	            { "base": "192.168.100.0/16", "size": 24 }
+	        ],
+	        "registry-mirrors": $mirrors
+	    }'
+	)
+	echo "$json" > /etc/docker/daemon.json
 	manager::systemctl start docker
 	if [ -f "/usr/bin/docker-compose" ];then
 		echo "docker-compose 二进制文件已存在"
@@ -944,7 +933,7 @@ EOF
 	if [[ $options_nas == 1 ]];then
 		cat >> /${prefixpath}server/docker-yaml/docker-lnmp.yaml << EOF
       # nas file
-      - /nuoyis-server/sharefile:/web/sharefile
+      - /${prefixpath}server/sharefile:/web/sharefile
 EOF
 	fi
 	cat >> /${prefixpath}server/docker-yaml/docker-lnmp.yaml << EOF
@@ -956,7 +945,7 @@ EOF
       retries: 3
       start_period: 10s
       timeout: 10s
-    user: "${SUID}:${SGID}"
+    user: "\${SUID}:\${SGID}"
     restart: always
 
   lnmp-mariadb:
@@ -1026,15 +1015,15 @@ install::lnmp(){
 	fi
 	id -u web >/dev/null 2>&1
 	if [ $? -eq 1 ];then
-		mkdir -p /${prefixpath}server/web/{logs/nginx,nginx/{server/conf/ssl,conf,webside/default,ssl},mariadb/{init,server,import,config}}
-		touch /${prefixpath}server/web/logs/nginx/{error.log,nginx.pid}
 		useradd -u 2233 -m -s /sbin/nologin web
 		groupadd web-share
 		usermod -aG web-share nginx
 		usermod -aG web-share web
-		chown -R root:web-share /${prefixpath}server/web/nginx/
-		chmod -R 2775 /${prefixpath}server/web/nginx/
 	fi
+	chown -R root:web-share /${prefixpath}server/web/nginx/
+	chmod -R 2775 /${prefixpath}server/web/nginx/
+	mkdir -p /${prefixpath}server/web/{logs/nginx,nginx/{server/conf/ssl,conf,webside/default,ssl},mariadb/{init,server,import,config}}
+	touch /${prefixpath}server/web/logs/nginx/{error.log,nginx.pid}
 	if [ $options_lnmp_value == "yum" ];then
 		install::lnmp::quick
 	elif [ $options_lnmp_value == "gcc" ];then
@@ -1099,7 +1088,7 @@ EOF
 			gpgcheck="1"
 			gpgkey="gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever"
 			cat >> /etc/yum.repos.d/toolbox.repo << EOF
-[${prefix}-baseos-debuginfo]
+[baseos-debuginfo]
 name=${prefixmirror}BaseOS - Debug
 baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/\$basearch/debug/tree/
 gpgcheck=${gpgcheck}
@@ -1109,7 +1098,7 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${prefix}-baseos-source]
+[baseos-source]
 name=${prefixmirror}BaseOS - Source
 baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/source/tree/
 gpgcheck=${gpgcheck}
@@ -1119,7 +1108,7 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${prefix}-appstream-debuginfo]
+[appstream-debuginfo]
 name=${prefixmirror}AppStream - Debug
 baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/\$basearch/debug/tree/
 gpgcheck=${gpgcheck}
@@ -1129,7 +1118,7 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${prefix}-appstream-source]
+[appstream-source]
 name=${prefixmirror}AppStream - Source
 baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/source/tree/
 gpgcheck=${gpgcheck}
@@ -1139,7 +1128,7 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${prefix}-crb]
+[crb]
 name=${prefixmirror}CRB
 baseurl=https://${yumurl}/${osname}/\$releasever/CRB/\$basearch/os/
 gpgcheck=${gpgcheck}
@@ -1149,7 +1138,7 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${prefix}-crb-debuginfo]
+[crb-debuginfo]
 name=${prefixmirror}CRB - Debug
 baseurl=https://${yumurl}/${osname}/\$releasever/CRB/\$basearch/debug/tree/
 gpgcheck=${gpgcheck}
@@ -1159,7 +1148,7 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${prefix}-crb-source]
+[crb-source]
 name=${prefixmirror}CRB - Source
 baseurl=https://${yumurl}/${osname}/\$releasever/CRB/source/tree/
 gpgcheck=${gpgcheck}
@@ -1171,7 +1160,7 @@ priority=1
 EOF
 		fi
     	cat >> /etc/yum.repos.d/toolbox.repo << EOF
-[${prefix}-BaseOS]
+[BaseOS]
 name=${prefixmirror}BaseOS
 baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/\$basearch/os/
 gpgcheck=${gpgcheck}
@@ -1181,7 +1170,7 @@ countme=1
 metadata_expire=6h
 priority=1
 
-[${prefix}-appstream]
+[appstream]
 name=${prefixmirror}AppStream
 baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/\$basearch/os/
 gpgcheck=${gpgcheck}
@@ -1202,31 +1191,30 @@ EOF
 			yumurl="mirrors.aliyun.com"
 		fi
 		curl -k -o /etc/yum.repos.d/epel.repo -L https://mirrors.aliyun.com/repo/epel-7.repo
-		# sed -i "s|http://mirrors.aliyun.com/centos/\$releasever|https://${yumurl}/centos-vault/$osversion|g" /etc/yum.repos.d/CentOS-Base.repo
 		cat > /etc/yum.repos.d/CentOS-Base.repo << EOF
 [base]
-name=CentOS-$osversion - Base - mirrors.aliyun.com
+name=CentOS-$osversion - Base
 failovermethod=priority
 baseurl=https://${yumurl}/centos-vault/$osversion/os/\$basearch/
 gpgcheck=1
 gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
 
 [updates]
-name=CentOS-$osversion - Updates - mirrors.aliyun.com
+name=CentOS-$osversion - Updates
 failovermethod=priority
 baseurl=https://${yumurl}/centos-vault/$osversion/updates/\$basearch/
 gpgcheck=1
 gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
 
 [extras]
-name=CentOS-$osversion - Extras - mirrors.aliyun.com
+name=CentOS-$osversion - Extras
 failovermethod=priority
 baseurl=https://${yumurl}/centos-vault/$osversion/extras/\$basearch/
 gpgcheck=1
 gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
 
 [centosplus]
-name=CentOS-$osversion - Plus - mirrors.aliyun.com
+name=CentOS-$osversion - Plus
 failovermethod=priority
 baseurl=https://${yumurl}/centos-vault/$osversion/centosplus/\$basearch/
 gpgcheck=1
@@ -1234,7 +1222,7 @@ enabled=0
 gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
 
 [contrib]
-name=CentOS-$osversion - Contrib - mirrors.aliyun.com
+name=CentOS-$osversion - Contrib
 failovermethod=priority
 baseurl=https://${yumurl}/centos-vault/$osversion/contrib/\$basearch/
 gpgcheck=1
@@ -1494,15 +1482,15 @@ if [ $PM = "yum" ] || [ $PM = "dnf" ];then
     	grub2-set-default 0
     	grub2-mkconfig -o /boot/grub2/grub.cfg
 	fi
-	cat > /nuoyis-server/shell/kernel-update.sh << EOF
+	cat > /${prefixpath}server/shell/kernel-update.sh << EOF
 #!/bin/bash
 yum clean all;
 yum upgrade -y;
 yes | dnf --disablerepo=\* --enablerepo=elrepo-kernel update kernel-ml*;
 yes | dnf remove --oldinstallonly --setopt installonly_limit=2 kernel;
-# 0 0 * * 1 bash /nuoyis-server/shell/kernel-update.sh > /nuoyis-server/logs/update.log 2>&1;
+# 0 0 * * 1 bash /${prefixpath}server/shell/kernel-update.sh > /${prefixpath}server/logs/update.log 2>&1;
 EOF
-(crontab -l 2>/dev/null; echo "0 0 * * 1 bash /nuoyis-server/shell/kernel-update.sh > /nuoyis-server/logs/update.log 2>&1;") | crontab -
+(crontab -l 2>/dev/null; echo "0 0 * * 1 bash /${prefixpath}server/shell/kernel-update.sh > /${prefixpath}server/logs/update.log 2>&1;") | crontab -
 else
 	# https://zichen.zone/archives/debian_linux_kernel_update.html
 	manager::repositories install linux-image-amd64 linux-headers-amd64
@@ -1631,10 +1619,10 @@ install::main(){
 
 	echo "安装核心软件包"
 	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
-		manager::repositories install sshpass dnf-plugins-core python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils tar chrony
+		manager::repositories install jq sshpass dnf-plugins-core python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils tar chrony
 	else
 		export DEBIAN_FRONTEND=noninteractive
-		manager::repositories install sshpass python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc g++ make unzip perl libipc-cmd-perl libtest-simple-perl pciutils tar ca-certificates curl gnupg ufw chrony
+		manager::repositories install jq sshpass python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc g++ make unzip perl libipc-cmd-perl libtest-simple-perl pciutils tar ca-certificates curl gnupg ufw chrony
 	fi
 }
 
@@ -1819,6 +1807,7 @@ while [[ $# -gt 0 ]]; do
             elif [ "$2" == "docker" ];then
 				options_docker=1
 			fi
+			options_lnmp_value=$2
             options_lnmp=1
             # install::lnmp
             shift 2
@@ -1851,7 +1840,11 @@ while [[ $# -gt 0 ]]; do
 			shift 3
 			;;
 		-xyu|--xuanyuanurl)
-			options_docker_xuanyuanpro_url=$2
+			if [[ "$2" != https://* ]]; then
+    			options_docker_xuanyuanpro_url="https://$2"
+			else
+				options_docker_xuanyuanpro_url=$2
+			fi
 			shift 2
 			;;
         -doa|--dockerapp)
@@ -1862,8 +1855,10 @@ while [[ $# -gt 0 ]]; do
         -na|--nas)
             # install::nas
             options_nas=1
-			options_lnmp=1
-			options_lnmp_value=gcc
+			if [ -z $options_lnmp ];then
+				options_lnmp=1
+				options_lnmp_value=gcc
+			fi
             shift
             ;;
         -oll|--ollama)
