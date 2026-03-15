@@ -73,8 +73,14 @@ if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
 		if [ $system_version -eq 7 ];then
 			osversion="7.9.2009"
 		elif [ $system_version -eq 8 ];then
-			osname="centos-vault"
-			osversion="8.5.2111"
+			system_pretty_name=`cat /etc/os-release | grep -oP '(?<=PRETTY_NAME=").*(?=")'`
+			if [ "$system_pretty_name" == "CentOS Stream 8" ];then
+				osname="centos-vault"
+				osversion="8-stream"
+			else
+				osname="centos-vault"
+				osversion="8-stream"
+			fi
 		elif [ $system_version -gt 8 ];then
 			osname="centos-stream"
 			osversion="\$releasever-stream"
@@ -84,6 +90,10 @@ if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
 		fi
 		;;
 		"openEuler")
+		;;
+		*)
+			osversion="\$releasever"
+		;;
 	esac
 	if [ -f "/etc/redhat-release" ];then
 		setenforce 0 &> /dev/null
@@ -1056,31 +1066,31 @@ conf::reposource::yum(){
 			cat >> /etc/yum.repos.d/toolbox.repo << EOF
 [highavailability]
 name=${prefixmirror}HighAvailability
-baseurl=https://${yumurl}/${osname}/\$releasever/HighAvailability/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/${osversion}/HighAvailability/\$basearch/os/
 gpgcheck=${gpgcheck}
 enabled=1
 
 [extras]
 name=${prefixmirror}Extras
-baseurl=https://${yumurl}/${osname}/\$releasever/extras/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/${osversion}/extras/\$basearch/os/
 gpgcheck=${gpgcheck}
 enabled=1
 
 [PowerTools]
 name=${prefixmirror}PowerTools
-baseurl=https://${yumurl}/${osname}/\$releasever/PowerTools/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/${osversion}/PowerTools/\$basearch/os/
 gpgcheck=${gpgcheck}
 enabled=1
 
 [extras]
 name=${prefixmirror}Extras
-baseurl=https://${yumurl}/${osname}/\$releasever/extras/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/${osversion}/extras/\$basearch/os/
 gpgcheck=${gpgcheck}
 enabled=1
 
 [centosplus]
 name=${prefixmirror}centosplus
-baseurl=https://${yumurl}/${osname}/\$releasever/centosplus/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/${osversion}/centosplus/\$basearch/os/
 gpgcheck=${gpgcheck}
 enabled=1
 EOF
@@ -1162,7 +1172,7 @@ EOF
     	cat >> /etc/yum.repos.d/toolbox.repo << EOF
 [BaseOS]
 name=${prefixmirror}BaseOS
-baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/\$basearch/os/
 gpgcheck=${gpgcheck}
 ${gpgkey}
 enabled=1
@@ -1172,7 +1182,7 @@ priority=1
 
 [appstream]
 name=${prefixmirror}AppStream
-baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/\$basearch/os/
+baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/\$basearch/os/
 gpgcheck=${gpgcheck}
 ${gpgkey}
 enabled=1
