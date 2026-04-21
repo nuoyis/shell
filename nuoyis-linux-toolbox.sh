@@ -146,6 +146,35 @@ trap 'exit_type=SIGINT; exit::backoff' SIGINT
 trap 'exit_type=SIGTERM; exit::backoff' SIGTERM
 trap 'exit_type=SIGHUP; exit::backoff' SIGHUP
 
+manager::nuoyis::download(){
+	host="shell.nuoyis.net"
+	cdncnameurl="shell.nuoyis.net.eo.dnse2.com"
+	urlfile="$1"
+	output="$2"
+	downloadurl="https://$host/$urlfile"
+
+	if [ -z "$output" ]; then
+        output="$(pwd)/$(basename "$urlfile")"
+    fi
+
+	echo "cf节点 尝试下载"
+	# curl -Lk --connect-timeout 10 -o "$output" "$downloadurl"
+	# if [ $? -ne 0 ]; then
+		echo "cf 节点下载失败，正在使用eo节点"
+		# 解析 cname IP
+        cname_ip=$(getent ahostsv4 "$cdncnameurl" | awk '{print $1}' | head -n1)
+		if [ -z "$cname_ip" ]; then
+            echo "eo节点 CNAME 解析失败"
+            return 1
+        fi
+		curl --connect-to $host:443:$cname_ip:443 -o "$output" $downloadurl
+		if [ $? -ne 0 ]; then
+            echo "eo节点 下载失败"
+            return 1
+		fi
+	# fi
+}
+
 manager::download(){
 	if [ -f /usr/bin/wget ];then
 		wget $1;
@@ -598,11 +627,8 @@ install::docker(){
 	if [ -f "/usr/bin/docker-compose" ];then
 		echo "docker-compose 二进制文件已存在"
 	else
-		if [[ "$server_location" == "cn" ]];then
-			curl -kL "https://openlist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/docker-compose/docker-compose-linux-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
-		else
-			curl -kL "https://github.com/docker/compose/releases/download/v5.0.1/docker-compose-linux-$(uname -m)" -o /usr/bin/docker-compose && chmod +x /usr/bin/docker-compose
-		fi
+		manager::nuoyis::download download/docker-compose/v2.33.0/docker-compose-linux-"$(uname -m)" /usr/bin/docker-compose
+		chmod +x /usr/bin/docker-compose
 	fi
 }
 
@@ -785,10 +811,10 @@ install::lnmp::gcc(){
 		manager::repositories install autoconf bison re2c make procps gcc g++ iputils-ping pkg-config libpcre3 libpcre3-dev zlib1g-dev openssl libssl-dev libxslt1-dev libpng-dev libjpeg-dev libfreetype6-dev libxml2-dev libsqlite3-dev libbz2-dev libcurl4-openssl-dev libxpm-dev libzip-dev libonig-dev libgd-dev libgeoip-dev
 	fi
 	cd /nuoyis-install
-	manager::download https://mirrors.huaweicloud.com/nginx/nginx-1.29.1.tar.gz
-	manager::download https://openlist.nuoyis.net/d/blog/linux%E8%BD%AF%E4%BB%B6%E5%8C%85%E5%8A%A0%E9%80%9F/php/php-8.4.2.tar.gz
+	manager::nuoyis::download download/nginx/nginx-1.29.1.tar.gz
+	manager::nuoyis::download download/php/php-8.4.20.tar.gz
 	tar -xzvf nginx-1.29.1.tar.gz
-	tar -xzvf php-8.4.2.tar.gz
+	tar -xzvf php-8.4.20.tar.gz
 	cd nginx-1.29.1
 	sed -i 's/#define NGINX_VERSION\s\+".*"/#define NGINX_VERSION      "1.29.1"/g' ./src/core/nginx.h
     sed -i 's/"nginx\/" NGINX_VERSION/"nuoyis server"/g' ./src/core/nginx.h
@@ -825,7 +851,7 @@ install::lnmp::gcc(){
         --with-stream_ssl_preread_module; \
 	make -j$(nproc) && make install
 	chmod +x /${prefixpath}server/nginx/server/sbin/nginx
-	cd ../php-8.4.2
+	cd ../php-8.4.20
 	./configure --prefix=/${prefixpath}server/web/php \
         --disable-shared \
         --with-config-file-path=/${prefixpath}server/web/php/etc/ \
@@ -1482,9 +1508,9 @@ if [ $PM = "yum" ] || [ $PM = "dnf" ];then
 		manager::repositories remove kernel-tools-libs.x86_64 kernel-tools.x86_64
 		manager::repositories installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml-tools.x86_64
 	elif [ $system_version -eq 7 ];then
-		wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
-    	wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-headers-5.4.226-1.el7.elrepo.x86_64.rpm
-    	wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
+		manager::nuoyis::download download/kernel/centos/7/kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
+		manager::nuoyis::download download/kernel/centos/7/kernel-lt-headers-5.4.226-1.el7.elrepo.x86_64.rpm
+		manager::nuoyis::download download/kernel/centos/7/kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
     	rpm -ivh kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
     	rpm -ivh kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
     	yum remove kernel-headers -y
