@@ -158,8 +158,8 @@ manager::nuoyis::download(){
     fi
 
 	echo "cf节点 尝试下载"
-	# curl -Lk --connect-timeout 10 -o "$output" "$downloadurl"
-	# if [ $? -ne 0 ]; then
+	curl -Lk --connect-timeout 10 -o "$output" "$downloadurl"
+	if [ $? -ne 0 ]; then
 		echo "cf 节点下载失败，正在使用eo节点"
 		# 解析 cname IP
         cname_ip=$(getent ahostsv4 "$cdncnameurl" | awk '{print $1}' | head -n1)
@@ -172,7 +172,7 @@ manager::nuoyis::download(){
             echo "eo节点 下载失败"
             return 1
 		fi
-	# fi
+	fi
 }
 
 manager::download(){
@@ -1716,7 +1716,11 @@ show::updateurl(){
 
 show::version(){
 	show::updateurl
-	shell_localhost="/usr/bin/nuoyis-toolbox"
+	if [ -z $1 ];then
+		shell_localhost="/usr/bin/nuoyis-toolbox"
+	else
+		shell_localhost="$1"
+	fi
 	REMOTE_HASH=$(curl -k -H "Cache-Control: no-cache" -H "Pragma: no-cache" -sSkL "$updateurl" | sha256sum | awk '{print $1}')
 	LOCAL_HASH=$(sha256sum "$shell_localhost" | awk '{print $1}')
 }
@@ -1725,9 +1729,17 @@ update::version(){
 	show::version
 	if [ "$REMOTE_HASH" != "$LOCAL_HASH" ]; then
     	echo "shell will update"
-		curl -sSkL -o /usr/bin/nuoyis-toolbox $updateurl
-		chmod +x /usr/bin/nuoyis-toolbox
-		echo "shell is updated"
+		curl -sSkL -o /tmp/nuoyis-toolbox $updateurl
+		show::version /tmp/nuoyis-toolbox
+		if [ "$REMOTE_HASH" != "$LOCAL_HASH" ]; then
+			rm -rf /tmp/nuoyis-toolbox
+			echo "shell update have error"
+		else
+			rm -rf /usr/bin/nuoyis-toolbox
+			mv /tmp/nuoyis-toolbox /usr/bin/nuoyis-toolbox
+			chmod +x /usr/bin/nuoyis-toolbox
+			echo "shell is updated"
+		fi
 	else
     	echo "shell is already up to date"
 	fi
