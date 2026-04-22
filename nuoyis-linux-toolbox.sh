@@ -26,9 +26,8 @@ options_docker_app=0
 options_nas=0
 options_ollama=0
 options_bt=0
-
-[ "$#" == "0" ] && {
-IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
+show::help(){
+	IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
   --install            install nuoyis toolbox and autoupdate
   --remove             remove nuoyis toolbox and autoupdate
   -ln, --lnmp          install nuoyis version lnmp. Options: gcc docker yum
@@ -62,6 +61,7 @@ for line in "${help_lines[@]}"; do
 done
 exit 0
 }
+[ "$#" == "0" ] && show::help
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -286,9 +286,23 @@ if command -v yum >/dev/null 2>&1 && [ -d /etc/yum.repos.d ]; then
     case "$system_name" in
         CentOS)
             case "$system_version" in
-                7) osversion="7.9.2009" ;;
-                8) osname="centos-vault"; osversion="8-stream" ;;
-                *) osname="centos-stream"; osversion="\$releasever-stream" ;;
+                7)
+					osname="centos-vault";
+					osversion="7.9.2009"
+					;;
+                8)
+					osname="centos-vault";
+					system_pretty_name=`cat /etc/os-release | grep -oP '(?<=PRETTY_NAME=").*(?=")'`
+					if [ "$system_pretty_name" == "CentOS Stream 8" ];then
+						osversion="8-stream"
+					else
+						osversion="8.5.2111"
+					fi
+					;;
+                *)
+					osname="centos-stream";
+					osversion="\$releasever-stream"
+					;;
             esac
             ;;
         openEuler)
@@ -1324,10 +1338,10 @@ conf::reposource::yum::repowrite() {
     local path=$2
     cat >> /etc/yum.repos.d/toolbox.repo <<EOF
 [$id]
-name=${prefixmirror}${osname} - ${id} - ${mirror_url}
+name=${prefixmirror}${system_name} - ${id} - ${mirror_url}
 baseurl=https://${mirror_url}/${osname}/${osversion}/${path}
 gpgcheck=${gpgcheck}
-${gpgkey}
+${gpgkey:+gpgkey=${gpgkey}}
 enabled=1
 countme=1
 metadata_expire=6h
@@ -1340,15 +1354,17 @@ conf::reposource::yum(){
 	case "$system_version" in
 		[0-7])
 			gpgcheck=0
+			gpgkey="https://mirrors.aliyun.com/centos-vault/RPM-GPG-KEY-CentOS-7"
 			repos=(
-        	    "updates HighAvailability/${osversion}/\$basearch/os/"
-        	    "extras extras/${osversion}/\$basearch/os/"
-        	    "PowerTools PowerTools/${osversion}/\$basearch/os/"
-        	    "centosplus centosplus/${osversion}/\$basearch/os/"
+        	    "updates updates/\$basearch/"
+        	    "extras extras/\$basearch/"
+        	    "centosplus centosplus/\$basearch/"
+        	    "cr cr/\$basearch/"
         	)
 			;;
 		8)
 			gpgcheck=0
+			gpgkey="https://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-Official"
         	repos=(
         	    "HighAvailability HighAvailability/\$basearch/os/"
         	    "extras extras/\$basearch/os/"
@@ -1358,7 +1374,7 @@ conf::reposource::yum(){
 			;;
 		*)
 			gpgcheck=1
-        	gpgkey="gpgkey=https://${mirror_url}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever"
+        	gpgkey="https://${mirror_url}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever"
         	repos=(
         	    "baseos-debuginfo BaseOS/\$basearch/debug/tree/"
         	    "baseos-source BaseOS/source/tree/"
@@ -1431,11 +1447,6 @@ conf::reposource::yum_additional_source(){
 }
 
 conf::reposource::deb(){
-    if [ "$options_yum_install" == "edu" ]; then
-        apt_url="mirrors.cernet.edu.cn"
-    elif [ "$options_yum_install" == "aliyun" ]; then
-        apt_url="mirrors.aliyun.com"
-    fi
 	echo "" > /etc/apt/sources.list
 	rm -rf /etc/apt/sources.list.d/*
 	if [ $system_name == "Debian" ]; then
@@ -1532,7 +1543,7 @@ conf::reposource(){
 			case "$system_name" in
 				"openeuler")
 				;;
-				"Rocky"|"CentOS")
+				"Rocky")
 					echo "正在检查是否存在冲突/模块缺失"
 					echo "正在检查模块依赖问题..."
 					options_install_check_modules_bug=$($PM check 2>&1)
@@ -1557,6 +1568,9 @@ conf::reposource(){
 						done <<< "$options_install_check_modules_bug"
 						echo "模块依赖修复和冲突模块禁用完成。"
 					fi
+					conf::reposource::yum
+				;;
+				"CentOS")
 					conf::reposource::yum
 				;;
 				"Red")
