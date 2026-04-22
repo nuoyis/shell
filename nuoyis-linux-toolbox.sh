@@ -5,14 +5,15 @@
 # auth           : nuoyis
 # Webside        : blog.nuoyis.net
 # debug          : bash nuoyis-toolbox -host aliyun -r edu -ln docker -doa -na -mp test666 -ku -tu
-
+#########################
 #### 手动变量定义区域 ####
+#########################
 # 环境变量设置
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
 # 语言设置
 LANG=en_US.UTF-8
-#### 变量初始化区域 ####
+gpgkey=""
 prefix=""
 mirror_update=0
 options_yum=0
@@ -26,6 +27,201 @@ options_nas=0
 options_ollama=0
 options_bt=0
 
+[ "$#" == "0" ] && {
+IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
+  --install            install nuoyis toolbox and autoupdate
+  --remove             remove nuoyis toolbox and autoupdate
+  -ln, --lnmp          install nuoyis version lnmp. Options: gcc docker yum
+  -do, --dockerinstall install docker
+  -doa, --dockerapp    install docker app (qinglong and openlist ...)
+  -na, --nas           install vsftpd nginx and nfs
+  -oll, --ollama       install ollama
+  -bt, --btpanel       install bt panel
+  -ku, --kernelupdate  install use elrepo to update kernel
+  -n, --name           config yum name and folder name
+  -host,--hostname     config default is options_toolbox_init,so you have use this options before install
+  -r,  --mirror        config yum mirrors update,if you not used, it will not be executed. Options: edu aliyun original other
+  -tu, --tuning	       config linux system tuning
+  -sw, --swap          config Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
+  -mp, --mariadbpassword config lnmp-mariadb password set  
+  -h,  --help          show shell help
+  -sha, --sha256sum    show shell's sha256sum
+  exam1:           nuoyis-toolbox -n nuoyis -host nuoyis-shanghai-1 -r aliyun -ln docker -tu -mp 123456 -na
+  exam2(overseas): nuoyis-toolbox -n nuoyis -host nuoyis-us-1 -r original -ln docker -tu -mp 123456 -na
+  exam3(btpanel):  nuoyis-toolbox -n nuoyis -host nuoyis-us-1 -r aliyun -bt
+EOF
+
+echo "welcome to use nuoyis's toolbox"
+echo "Blog: https://blog.nuoyis.net"
+echo "use: $0 [command]..."
+echo
+echo "command:"
+# 遍历并输出
+for line in "${help_lines[@]}"; do
+    echo "$line"
+done
+exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+	    --install)
+			echo "检查脚本是否存在/usr/bin/nuoyis-toolbox中"
+			if [ ! -f /usr/bin/nuoyis-toolbox ]; then
+				echo "脚本不存在存在于环境变量，正在下载并创建到/usr/bin/nuoyis-toolbox"
+				if [ -z "$2" ];then
+					read -p "请输入下载渠道，1是gitee加速版，2是github版" nuoyis_install_mirrors
+				else
+					nuoyis_install_mirrors=$2
+				fi
+				while [[ ! "$nuoyis_install_mirrors" =~ ^[1-2]$ ]]; do
+					echo "无效输入，请输入 1 2作为有效选项。"
+					read -p "请输入下载渠道，1是gitee加速版，2是github版" nuoyis_install_mirrors
+				done
+				show::updateurl
+				curl -sSkL -o /usr/bin/nuoyis-toolbox $updateurl
+				chmod +x /usr/bin/nuoyis-toolbox
+				echo "开启crontab 自动更新检测，如果介意请使用 crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab - 删除该行"
+				crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab -
+				(crontab -l 2>/dev/null; echo "0 * * * * /usr/bin/nuoyis-toolbox --update $nuoyis_install_mirrors;") | crontab -
+			else
+				echo "已通过各种方式部署于环境变量中，无需重复安装"
+			fi
+			exit 0
+		    shift
+		    ;;
+		--remove)
+			rm -rf /usr/bin/nuoyis-toolbox
+			crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab -
+			exit 0
+			shift
+			;;
+        -n|--name)
+            prefix=$2
+            shift 2
+            ;;
+        -host|--hostname)
+            hostnamectl set-hostname $2
+            shift 2
+            ;;
+        -r|--mirror)
+            if [[ "$2" != "aliyun" && "$2" != "edu" && "$2" != "original" && "$2" != "other" ]]; then
+                echo "unknown volume: $2"
+                show::help
+                exit 1
+            fi
+            options_yum_install=$2
+            options_yum=1
+            # conf::reposource
+            shift 2
+            ;;
+		-ru|--mirrorupdate)
+			mirror_update=1
+			shift
+			;;
+        -ln|--lnmp)
+            if [[ "$2" != "gcc" && "$2" != "docker" && "$2" != "yum" ]]; then
+                echo "unknown volume: $2"
+                show::help
+                exit 1
+            elif [ "$2" == "docker" ];then
+				options_docker=1
+			fi
+			options_lnmp_value=$2
+            options_lnmp=1
+            # install::lnmp
+            shift 2
+            ;;
+		-tu|--tuning)
+			options_tuning=1
+			shift
+			;;
+		-ku|--kernelupdate)
+			options_kernel_update=1
+			shift
+			;;
+        -sw|--swap)
+            options_swap_value=$2
+            options_swap=1
+            shift 2
+            ;;
+        -mp|--mysqlpassword)
+            options_mariadb_value=$2
+            shift 2
+            ;;
+        -do|--dockerinstall)
+            # install::docker
+            options_docker=1
+            shift
+            ;;
+		-xyl|--xuanyuanlogin)
+			options_docker_xuanyuanpro_username=$3
+			options_docker_xuanyuanpro_password=$3
+			shift 3
+			;;
+		-xyu|--xuanyuanurl)
+			if [[ "$2" != https://* ]]; then
+    			options_docker_xuanyuanpro_url="https://$2"
+			else
+				options_docker_xuanyuanpro_url=$2
+			fi
+			shift 2
+			;;
+        -doa|--dockerapp)
+            # install::docker
+            options_docker_app=1
+            shift
+            ;;
+        -na|--nas)
+            # install::nas
+            options_nas=1
+			if [ -z $options_lnmp ];then
+				options_lnmp=1
+				options_lnmp_value=gcc
+			fi
+            shift
+            ;;
+        -oll|--ollama)
+            options_ollama=1
+            shift
+            ;;
+        -bt|--btpanelenable)
+            options_bt=1
+            shift
+            ;;
+		-up|--update)
+			nuoyis_install_mirrors=$2
+			update::version
+			exit 0
+			shift
+			;;
+		-sha|--sha256sum)
+			show::version
+			echo "shell latest version sha256sum: $REMOTE_HASH"
+			echo "shell local version sha256sum: $LOCAL_HASH"
+			exit 0
+			shift
+			;;
+        -h|--help)
+            show::help
+            ;;
+        -*)
+            echo "unknown command: $1"
+            show::help
+            ;;
+        *)
+            echo "unknown Options: $1"
+            show::help
+            ;;
+    esac
+done
+
+prefixmirror=${prefix:+$prefix - }
+prefixpath=${prefix:+$prefix-}
+
+#########################
+#### 自动变量初始化区域 ####
+#########################
 # 脚本执行时间统计
 startTime=`date +%Y%m%d-%H:%M:%S`
 startTime_s=`date +%s`
@@ -52,64 +248,79 @@ elif ping -c1 -W1 www.baidu.com >/dev/null 2>&1; then
 else
 	server_location="overseas"
 fi
-echo "判断服务器位置为:$server_location"
 # vsftpd配置
 if [ $system_name == "Debian" ] || [ $system_name == "Ubuntu" ];then
 	vsftpdfile="/etc/vsftpd.conf"
 else
 	vsftpdfile="/etc/vsftpd/vsftpd.conf"
 fi
-# 检测包管理器
-if command -v yum > /dev/null 2>&1 && [ -d "/etc/yum.repos.d/" ]; then
-	if [ $system_version -lt 8 ]; then
-    	PM="yum"
-		PMpath="/etc/yum.conf"
-	else
-		PM="dnf"
-		PMpath="/etc/dnf/dnf.conf"
-	fi
-	case $system_name in
-		"CentOS")
-		if [ $system_version -eq 7 ];then
-			osversion="7.9.2009"
-		elif [ $system_version -eq 8 ];then
-			system_pretty_name=`cat /etc/os-release | grep -oP '(?<=PRETTY_NAME=").*(?=")'`
-			if [ "$system_pretty_name" == "CentOS Stream 8" ];then
-				osname="centos-vault"
-				osversion="8-stream"
-			else
-				osname="centos-vault"
-				osversion="8-stream"
-			fi
-		elif [ $system_version -gt 8 ];then
-			osname="centos-stream"
-			osversion="\$releasever-stream"
-		else
-			echo "no supported system"
-			exit 1
-		fi
+# ---------- 镜像源 ----------
+case "$options_yum_install" in
+    edu)
+		mirror_url="mirrors.cernet.edu.cn"
 		;;
-		"openEuler")
+    aliyun)
+		mirror_url="mirrors.aliyun.com"
 		;;
-		*)
-			osversion="\$releasever"
+    original)
+		[ $options_lnmp_value == "Rocky" ] && mirror_url="dl.rockylinux.org"
 		;;
-	esac
-	if [ -f "/etc/redhat-release" ];then
-		setenforce 0 &> /dev/null
-		sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
-	fi
-elif command -v apt-get > /dev/null 2>&1 && command -v dpkg > /dev/null 2>&1; then
+    *)
+		mirror_url="mirrors.aliyun.com"
+		;;
+esac
+# ---------- 检测包管理器 ----------
+if command -v yum >/dev/null 2>&1 && [ -d /etc/yum.repos.d ]; then
+    # ---------- 新旧包管理器判断 ----------
+    if (( system_version < 8 )); then
+        PM="yum"
+        PMpath="/etc/yum.conf"
+    else
+        PM="dnf"
+        PMpath="/etc/dnf/dnf.conf"
+    fi
+
+    osname="$system_name"
+    osversion="\$releasever"
+    # ---------- 系统逻辑 ----------
+    case "$system_name" in
+        CentOS)
+            case "$system_version" in
+                7) osversion="7.9.2009" ;;
+                8) osname="centos-vault"; osversion="8-stream" ;;
+                *) osname="centos-stream"; osversion="\$releasever-stream" ;;
+            esac
+            ;;
+        openEuler)
+            osname="openeuler"
+            ;;
+		Rocky)
+			case "$options_yum_install" in
+            	edu)      osname="rocky" ;;
+            	aliyun)   osname="rockylinux" ;;
+            	original) osname="pub/rocky" ;;
+        	esac
+			;;
+    esac
+
+    # ---------- SELinux ----------
+    if [[ -f /etc/redhat-release ]]; then
+        setenforce 0 &>/dev/null
+        sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+    fi
+# ---------- Debian / Ubuntu ----------
+elif command -v apt-get >/dev/null 2>&1 && command -v dpkg >/dev/null 2>&1; then
     PM="apt"
-	export DEBIAN_FRONTEND=noninteractive
-	export UCF_FORCE_CONFFNEW=1
-	export NEEDRESTART_MODE=a
-	export APT_LISTCHANGES_FRONTEND=none
-	if [[ $installlock -eq 0 ]]; then
-		if [ -f /etc/needrestart/needrestart.conf ]; then
-			sed -i 's/#\$nrconf{restart} = .*/$nrconf{restart} = "a";/' /etc/needrestart/needrestart.conf
-		fi
-	fi
+    export DEBIAN_FRONTEND=noninteractive
+    export UCF_FORCE_CONFFNEW=1
+    export NEEDRESTART_MODE=a
+    export APT_LISTCHANGES_FRONTEND=none
+
+    if (( installlock == 0 )) && [[ -f /etc/needrestart/needrestart.conf ]]; then
+        sed -i 's|#\$nrconf{restart} = .*|$nrconf{restart} = "a";|' \
+            /etc/needrestart/needrestart.conf
+    fi
+
 fi
 # 时间同步配置文件位置判断
 if [ $PM = "yum" ] || [ $PM = "dnf" ];then
@@ -118,7 +329,16 @@ else
 	chronyconf=/etc/chrony/chrony.conf
 fi
 
+# root判断
+echo "检测是否是root用户"
+if [ $whois != "root" ];then
+	echo "非root用户，无法满足初始化需求"
+	exit 1
+fi
+
+#################
 #### 函数区域 ####
+#################
 
 # 用户终止脚本判断
 exit::backoff() {
@@ -280,6 +500,37 @@ manager::filewrite(){
 		$3 >> $2
 	# elif [ $1 -eq 2 ];then
 	fi
+}
+
+manager::swap(){
+# 检查是否已有 swap 文件存在
+swap_file=$(swapon --show=NAME | grep -E '/toolbox-swap')
+
+if [ -n "$swap_file" ];then
+	echo "虚拟内存已存在"
+else
+    memory=`free -m | awk '/^Mem:/ {print $2}'`
+    if [ $memory -lt 1024 ] || [ $options_swap -eq 1 ];then
+        echo "设置虚拟内存"
+        if [ -z $options_swap_value ];then
+            swapsize=$[1024*2];
+        else
+            swapsize=$options_swap_value
+        fi
+        cat > /etc/sysctl.conf << EOF
+$(egrep -v '^vm.swappiness' /etc/sysctl.conf)
+EOF
+        echo "vm.swappiness=60" >> /etc/sysctl.conf
+        dd if=/dev/zero of=/toolbox-swap bs=1M count=$swapsize
+        chmod 0600 /toolbox-swap
+        mkswap -f /toolbox-swap
+        swapon /toolbox-swap
+        echo "/toolbox-swap    swap    swap    defaults    0 0" >> /etc/fstab
+        mount -a
+        sysctl -p
+    fi
+fi
+install::main
 }
 
 install::bt(){
@@ -1068,204 +1319,76 @@ install::lnmp(){
 		install::lnmp::docker
 	fi
 }
+conf::reposource::yum::repowrite() {
+    local id=$1
+    local path=$2
+    cat >> /etc/yum.repos.d/toolbox.repo <<EOF
+[$id]
+name=${prefixmirror}${osname} - ${id} - ${mirror_url}
+baseurl=https://${mirror_url}/${osname}/${osversion}/${path}
+gpgcheck=${gpgcheck}
+${gpgkey}
+enabled=1
+countme=1
+metadata_expire=6h
+priority=1
+
+EOF
+}
 
 conf::reposource::yum(){
+	case "$system_version" in
+		[0-7])
+			gpgcheck=0
+			repos=(
+        	    "updates HighAvailability/${osversion}/\$basearch/os/"
+        	    "extras extras/${osversion}/\$basearch/os/"
+        	    "PowerTools PowerTools/${osversion}/\$basearch/os/"
+        	    "centosplus centosplus/${osversion}/\$basearch/os/"
+        	)
+			;;
+		8)
+			gpgcheck=0
+        	repos=(
+        	    "HighAvailability HighAvailability/\$basearch/os/"
+        	    "extras extras/\$basearch/os/"
+        	    "PowerTools PowerTools/\$basearch/os/"
+        	    "centosplus centosplus/\$basearch/os/"
+        	)
+			;;
+		*)
+			gpgcheck=1
+        	gpgkey="gpgkey=https://${mirror_url}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever"
+        	repos=(
+        	    "baseos-debuginfo BaseOS/\$basearch/debug/tree/"
+        	    "baseos-source BaseOS/source/tree/"
+        	    "appstream-debuginfo AppStream/\$basearch/debug/tree/"
+        	    "appstream-source AppStream/source/tree/"
+        	    "crb CRB/\$basearch/os/"
+        	    "crb-debuginfo CRB/\$basearch/debug/tree/"
+        	    "crb-source CRB/source/tree/"
+        	)
+			;;
+	esac
+
+	# ---------- 其他仓库 ----------
+	for repo in "${repos[@]}"; do
+        set -- $repo
+        conf::reposource::yum::repowrite "$1" "$2" "$3"
+    done
+
+	# ---------- 通用仓库 ----------
 	if [ $system_version -ge 8 ]; then
-		if [[ "$options_yum_install" == "edu" ]];then
-			yumurl="mirrors.cernet.edu.cn"
-			if [[ $system_name == "Rocky" ]]; then
-				osname="rocky"
-			fi
-		elif [[ "$options_yum_install" == "aliyun" ]];then
-			yumurl="mirrors.aliyun.com"
-			if [[ $system_name == "Rocky" ]]; then
-				osname="rockylinux"
-			fi
-		elif [[ "$options_yum_install" == "original" ]]; then
-			if [[ $system_name == "Rocky" ]]; then
-				yumurl="dl.rockylinux.org"
-				osname="pub/rocky"
-			fi
-		fi
-		if [ $system_version -eq 8 ];then
-			gpgcheck="0"
-			cat >> /etc/yum.repos.d/toolbox.repo << EOF
-[highavailability]
-name=${prefixmirror}HighAvailability
-baseurl=https://${yumurl}/${osname}/${osversion}/HighAvailability/\$basearch/os/
-gpgcheck=${gpgcheck}
-enabled=1
-
-[extras]
-name=${prefixmirror}Extras
-baseurl=https://${yumurl}/${osname}/${osversion}/extras/\$basearch/os/
-gpgcheck=${gpgcheck}
-enabled=1
-
-[PowerTools]
-name=${prefixmirror}PowerTools
-baseurl=https://${yumurl}/${osname}/${osversion}/PowerTools/\$basearch/os/
-gpgcheck=${gpgcheck}
-enabled=1
-
-[extras]
-name=${prefixmirror}Extras
-baseurl=https://${yumurl}/${osname}/${osversion}/extras/\$basearch/os/
-gpgcheck=${gpgcheck}
-enabled=1
-
-[centosplus]
-name=${prefixmirror}centosplus
-baseurl=https://${yumurl}/${osname}/${osversion}/centosplus/\$basearch/os/
-gpgcheck=${gpgcheck}
-enabled=1
-EOF
-		else
-			gpgcheck="1"
-			gpgkey="gpgkey=https://${yumurl}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever"
-			cat >> /etc/yum.repos.d/toolbox.repo << EOF
-[baseos-debuginfo]
-name=${prefixmirror}BaseOS - Debug
-baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/\$basearch/debug/tree/
-gpgcheck=${gpgcheck}
-${gpgkey}
-enabled=1
-countme=1
-metadata_expire=6h
-priority=1
-
-[baseos-source]
-name=${prefixmirror}BaseOS - Source
-baseurl=https://${yumurl}/${osname}/\$releasever/BaseOS/source/tree/
-gpgcheck=${gpgcheck}
-${gpgkey}
-enabled=1
-countme=1
-metadata_expire=6h
-priority=1
-
-[appstream-debuginfo]
-name=${prefixmirror}AppStream - Debug
-baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/\$basearch/debug/tree/
-gpgcheck=${gpgcheck}
-${gpgkey}
-enabled=1
-countme=1
-metadata_expire=6h
-priority=1
-
-[appstream-source]
-name=${prefixmirror}AppStream - Source
-baseurl=https://${yumurl}/${osname}/\$releasever/AppStream/source/tree/
-gpgcheck=${gpgcheck}
-${gpgkey}
-enabled=1
-countme=1
-metadata_expire=6h
-priority=1
-
-[crb]
-name=${prefixmirror}CRB
-baseurl=https://${yumurl}/${osname}/\$releasever/CRB/\$basearch/os/
-gpgcheck=${gpgcheck}
-${gpgkey}
-enabled=1
-countme=1
-metadata_expire=6h
-priority=1
-
-[crb-debuginfo]
-name=${prefixmirror}CRB - Debug
-baseurl=https://${yumurl}/${osname}/\$releasever/CRB/\$basearch/debug/tree/
-gpgcheck=${gpgcheck}
-${gpgkey}
-enabled=1
-countme=1
-metadata_expire=6h
-priority=1
-
-[crb-source]
-name=${prefixmirror}CRB - Source
-baseurl=https://${yumurl}/${osname}/\$releasever/CRB/source/tree/
-gpgcheck=${gpgcheck}
-${gpgkey}
-enabled=1
-countme=1
-metadata_expire=6h
-priority=1
-EOF
-		fi
-    	cat >> /etc/yum.repos.d/toolbox.repo << EOF
-[BaseOS]
-name=${prefixmirror}BaseOS
-baseurl=https://${yumurl}/${osname}/${osversion}/BaseOS/\$basearch/os/
-gpgcheck=${gpgcheck}
-${gpgkey}
-enabled=1
-countme=1
-metadata_expire=6h
-priority=1
-
-[appstream]
-name=${prefixmirror}AppStream
-baseurl=https://${yumurl}/${osname}/${osversion}/AppStream/\$basearch/os/
-gpgcheck=${gpgcheck}
-${gpgkey}
-enabled=1
-countme=1
-metadata_expire=6h
-priority=1
-EOF
-		sed -i '/^skip_broken/d; /^max_parallel_downloads/d; /^metadata_expire/d' $PMpath
-		echo "skip_broken=True" >> $PMpath
-		echo "max_parallel_downloads=20" >> $PMpath
-		echo "metadata_expire=15m" >> $PMpath
+		conf::reposource::yum::repowrite "baseOS" "BaseOS/\$basearch/os/"
+    	conf::reposource::yum::repowrite "appstream" "AppStream/\$basearch/os/"
 	else
-		if [[ "$options_yum_install" == "edu" ]];then
-			yumurl="mirrors.cernet.edu.cn"
-		elif [[ "$options_yum_install" == "aliyun" ]];then
-			yumurl="mirrors.aliyun.com"
-		fi
-		curl -k -o /etc/yum.repos.d/epel.repo -L https://mirrors.aliyun.com/repo/epel-7.repo
-		cat > /etc/yum.repos.d/CentOS-Base.repo << EOF
-[base]
-name=CentOS-$osversion - Base
-failovermethod=priority
-baseurl=https://${yumurl}/centos-vault/$osversion/os/\$basearch/
-gpgcheck=1
-gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
-
-[updates]
-name=CentOS-$osversion - Updates
-failovermethod=priority
-baseurl=https://${yumurl}/centos-vault/$osversion/updates/\$basearch/
-gpgcheck=1
-gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
-
-[extras]
-name=CentOS-$osversion - Extras
-failovermethod=priority
-baseurl=https://${yumurl}/centos-vault/$osversion/extras/\$basearch/
-gpgcheck=1
-gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
-
-[centosplus]
-name=CentOS-$osversion - Plus
-failovermethod=priority
-baseurl=https://${yumurl}/centos-vault/$osversion/centosplus/\$basearch/
-gpgcheck=1
-enabled=0
-gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
-
-[contrib]
-name=CentOS-$osversion - Contrib
-failovermethod=priority
-baseurl=https://${yumurl}/centos-vault/$osversion/contrib/\$basearch/
-gpgcheck=1
-enabled=0
-gpgkey=https://${yumurl}/centos-vault/RPM-GPG-KEY-CentOS-$system_version
-EOF
+		conf::reposource::yum::repowrite "baseOS" "os/\$basearch/"
 	fi
+
+	sed -i '/^skip_broken/d; /^max_parallel_downloads/d; /^metadata_expire/d' $PMpath
+	echo "skip_broken=True" >> $PMpath
+	echo "max_parallel_downloads=20" >> $PMpath
+	echo "metadata_expire=15m" >> $PMpath
 }
 
 conf::reposource::yum_additional_source(){
@@ -1293,7 +1416,7 @@ conf::reposource::yum_additional_source(){
 			-e 's/mirrorlist=/#mirrorlist=/g' \
 			-i /etc/yum.repos.d/elrepo.repo
 	else
-		manager::repositories install https://${yumurl}/remi/enterprise/remi-release-$system_version.rpm
+		manager::repositories install https://${mirror_url}/remi/enterprise/remi-release-$system_version.rpm
 
 		sed -e 's|^mirrorlist=|#mirrorlist=|g' \
 			-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
@@ -1317,9 +1440,9 @@ conf::reposource::deb(){
 	rm -rf /etc/apt/sources.list.d/*
 	if [ $system_name == "Debian" ]; then
 		cat > /etc/apt/sources.list.d/mirror.list << EOF
-deb https://mirrors.tuna.tsinghua.edu.cn/debian/ $(lsb_release -sc) main contrib non-free non-free-firmware
-deb https://mirrors.tuna.tsinghua.edu.cn/debian/ $(lsb_release -sc)-updates main contrib non-free non-free-firmware
-deb https://mirrors.tuna.tsinghua.edu.cn/debian/ $(lsb_release -sc)-backports main contrib non-free non-free-firmware
+deb https://${mirror_url}/debian/ $(lsb_release -sc) main contrib non-free non-free-firmware
+deb https://${mirror_url}/debian/ $(lsb_release -sc)-updates main contrib non-free non-free-firmware
+deb https://${mirror_url}/debian/ $(lsb_release -sc)-backports main contrib non-free non-free-firmware
 deb https://security.debian.org/debian-security $(lsb_release -sc)-security main contrib non-free non-free-firmware
 EOF
        	wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
@@ -1327,9 +1450,9 @@ EOF
 		echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
     else
 		cat > /etc/apt/sources.list.d/mirror.list << EOF
-deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ $(lsb_release -sc) main restricted universe multiverse
-deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ $(lsb_release -sc)-updates main restricted universe multiverse
-deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ $(lsb_release -sc)-backports main restricted universe multiverse
+deb https://${mirror_url}/ubuntu/ $(lsb_release -sc) main restricted universe multiverse
+deb https://${mirror_url}/ubuntu/ $(lsb_release -sc)-updates main restricted universe multiverse
+deb https://${mirror_url}/ubuntu/ $(lsb_release -sc)-backports main restricted universe multiverse
 deb http://security.ubuntu.com/ubuntu/ $(lsb_release -sc)-security main restricted universe multiverse
 EOF
       	yes | add-apt-repository ppa:ondrej/php
@@ -1378,19 +1501,18 @@ conf::reposource::redhat(){
 
 conf::reposource(){
 	if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
-		echo "正在移动源到/etc/yum.repos.d/bak"
-		if [ ! -d /etc/yum.repos.d/bak ];then
-			mkdir -p /etc/yum.repos.d/bak
-		fi
-		mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
-		mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
-	
 		# 判断源站
 		if [ "$options_yum_install" == "other" ]; then
 			manager::download https://linuxmirrors.cn/main.sh
 			source main.sh
 			echo "yes"
 		else
+			echo "正在移动源到/etc/yum.repos.d/bak"
+			if [ ! -d /etc/yum.repos.d/bak ];then
+				mkdir -p /etc/yum.repos.d/bak
+			fi
+			mv -f /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/ 2>/dev/null
+			mv -f /etc/yum.repos.d/*.repo.* /etc/yum.repos.d/bak/ 2>/dev/null
 			manager::repositories installcheck epel
 			if [ $? -eq 0 ];then
 				manager::repositories remove epel-release epel-next-release
@@ -1405,10 +1527,12 @@ conf::reposource(){
 			if [ $? -eq 0 ];then
 				manager::repositories remove elrepo-release.noarch
 			fi
-			if [ $system_name == "openEuler" ];then
-				sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
-			else
-				if [ $system_name == "Rocky" ];then
+
+			# yum系统判断
+			case "$system_name" in
+				"openeuler")
+				;;
+				"Rocky"|"CentOS")
 					echo "正在检查是否存在冲突/模块缺失"
 					echo "正在检查模块依赖问题..."
 					options_install_check_modules_bug=$($PM check 2>&1)
@@ -1433,29 +1557,27 @@ conf::reposource(){
 						done <<< "$options_install_check_modules_bug"
 						echo "模块依赖修复和冲突模块禁用完成。"
 					fi
-				fi
-				conf::reposource::yum
-			fi
-			
+					conf::reposource::yum
+				;;
+				"Red")
+					conf::reposource::redhat
+				;;
+			esac			
 		fi
 	elif [ $PM = "apt" ];then
 			conf::reposource::deb
 	fi
 	
-		# 红帽系统特调
-		if [ $system_name == "Red" ];then
-			conf::reposource::redhat
+	if [[ ! -f /root/.toolbox-install-init.lock ]]; then
+		echo "正在安装时间同步软件，以及检查时间并同步，防止yum报错"
+		if [ -f /etc/redhat-release ]; then
+	    	yum --setopt=sslverify=0 -y install chrony
+		elif [ -f /etc/debian_version ]; then
+	    	apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false update -y
+	    	apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false install -y chrony
 		fi
-		if [[ ! -f /root/.toolbox-install-init.lock ]]; then
-			echo "正在安装时间同步软件，以及检查时间并同步，防止yum报错"
-			if [ -f /etc/redhat-release ]; then
-	    		yum --setopt=sslverify=0 -y install chrony
-			elif [ -f /etc/debian_version ]; then
-	    		apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false update -y
-	    		apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false install -y chrony
-			fi
-		fi
-		cat > "$chronyconf" << EOF
+	fi
+	cat > "$chronyconf" << EOF
 server ntp.aliyun.com iburst
 server ntp1.aliyun.com iburst
 server ntp2.aliyun.com iburst
@@ -1745,243 +1867,14 @@ update::version(){
 	fi
 }
 
-show::help(){
-IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
-  --install            install nuoyis toolbox and autoupdate
-  --remove             remove nuoyis toolbox and autoupdate
-  -ln, --lnmp          install nuoyis version lnmp. Options: gcc docker yum
-  -do, --dockerinstall install docker
-  -doa, --dockerapp    install docker app (qinglong and openlist ...)
-  -na, --nas           install vsftpd nginx and nfs
-  -oll, --ollama       install ollama
-  -bt, --btpanel       install bt panel
-  -ku, --kernelupdate  install use elrepo to update kernel
-  -n, --name           config yum name and folder name
-  -host,--hostname     config default is options_toolbox_init,so you have use this options before install
-  -r,  --mirror        config yum mirrors update,if you not used, it will not be executed. Options: edu aliyun original other
-  -tu, --tuning	       config linux system tuning
-  -sw, --swap          config Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
-  -mp, --mariadbpassword config lnmp-mariadb password set  
-  -h,  --help          show shell help
-  -sha, --sha256sum    show shell's sha256sum
-  exam1:           nuoyis-toolbox -n nuoyis -host nuoyis-shanghai-1 -r aliyun -ln docker -tu -mp 123456 -na
-  exam2(overseas): nuoyis-toolbox -n nuoyis -host nuoyis-us-1 -r original -ln docker -tu -mp 123456 -na
-  exam3(btpanel):  nuoyis-toolbox -n nuoyis -host nuoyis-us-1 -r aliyun -bt
-EOF
-
-echo "welcome to use nuoyis's toolbox"
-echo "Blog: https://blog.nuoyis.net"
-echo "use: $0 [command]..."
-echo
-echo "command:"
-# 遍历并输出
-for line in "${help_lines[@]}"; do
-    echo "$line"
-done
-exit 0
-}
-
-# root判断
-echo "检测是否是root用户"
-if [ $whois != "root" ];then
-	echo "非root用户，无法满足初始化需求"
-	exit 1
+echo "判断服务器位置为:$server_location"
+if [[ $installlock -eq 0 ]]; then
+	touch /root/.toolbox-install-init.lock
 fi
-#### 参数解析生成区域 ####
-[ "$#" == "0" ] && show::help
-
-# 参数解析
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-	    --install)
-			echo "检查脚本是否存在/usr/bin/nuoyis-toolbox中"
-			if [ ! -f /usr/bin/nuoyis-toolbox ]; then
-				echo "脚本不存在存在于环境变量，正在下载并创建到/usr/bin/nuoyis-toolbox"
-				if [ -z "$2" ];then
-					read -p "请输入下载渠道，1是gitee加速版，2是github版" nuoyis_install_mirrors
-				else
-					nuoyis_install_mirrors=$2
-				fi
-				while [[ ! "$nuoyis_install_mirrors" =~ ^[1-2]$ ]]; do
-					echo "无效输入，请输入 1 2作为有效选项。"
-					read -p "请输入下载渠道，1是gitee加速版，2是github版" nuoyis_install_mirrors
-				done
-				show::updateurl
-				curl -sSkL -o /usr/bin/nuoyis-toolbox $updateurl
-				chmod +x /usr/bin/nuoyis-toolbox
-				echo "开启crontab 自动更新检测，如果介意请使用 crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab - 删除该行"
-				crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab -
-				(crontab -l 2>/dev/null; echo "0 * * * * /usr/bin/nuoyis-toolbox --update $nuoyis_install_mirrors;") | crontab -
-			else
-				echo "已通过各种方式部署于环境变量中，无需重复安装"
-			fi
-			exit 0
-		    shift
-		    ;;
-		--remove)
-			rm -rf /usr/bin/nuoyis-toolbox
-			crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab -
-			exit 0
-			shift
-			;;
-        -n|--name)
-            prefix=$2
-            shift 2
-            ;;
-        -host|--hostname)
-            hostnamectl set-hostname $2
-            shift 2
-            ;;
-        -r|--mirror)
-            if [[ "$2" != "aliyun" && "$2" != "edu" && "$2" != "original" && "$2" != "other" ]]; then
-                echo "unknown volume: $2"
-                show::help
-                exit 1
-            fi
-            options_yum_install=$2
-            options_yum=1
-            # conf::reposource
-            shift 2
-            ;;
-		-ru|--mirrorupdate)
-			mirror_update=1
-			shift
-			;;
-        -ln|--lnmp)
-            if [[ "$2" != "gcc" && "$2" != "docker" && "$2" != "yum" ]]; then
-                echo "unknown volume: $2"
-                show::help
-                exit 1
-            elif [ "$2" == "docker" ];then
-				options_docker=1
-			fi
-			options_lnmp_value=$2
-            options_lnmp=1
-            # install::lnmp
-            shift 2
-            ;;
-		-tu|--tuning)
-			options_tuning=1
-			shift
-			;;
-		-ku|--kernelupdate)
-			options_kernel_update=1
-			shift
-			;;
-        -sw|--swap)
-            options_swap_value=$2
-            options_swap=1
-            shift 2
-            ;;
-        -mp|--mysqlpassword)
-            options_mariadb_value=$2
-            shift 2
-            ;;
-        -do|--dockerinstall)
-            # install::docker
-            options_docker=1
-            shift
-            ;;
-		-xyl|--xuanyuanlogin)
-			options_docker_xuanyuanpro_username=$3
-			options_docker_xuanyuanpro_password=$3
-			shift 3
-			;;
-		-xyu|--xuanyuanurl)
-			if [[ "$2" != https://* ]]; then
-    			options_docker_xuanyuanpro_url="https://$2"
-			else
-				options_docker_xuanyuanpro_url=$2
-			fi
-			shift 2
-			;;
-        -doa|--dockerapp)
-            # install::docker
-            options_docker_app=1
-            shift
-            ;;
-        -na|--nas)
-            # install::nas
-            options_nas=1
-			if [ -z $options_lnmp ];then
-				options_lnmp=1
-				options_lnmp_value=gcc
-			fi
-            shift
-            ;;
-        -oll|--ollama)
-            options_ollama=1
-            shift
-            ;;
-        -bt|--btpanelenable)
-            options_bt=1
-            shift
-            ;;
-		-up|--update)
-			nuoyis_install_mirrors=$2
-			update::version
-			exit 0
-			shift
-			;;
-		-sha|--sha256sum)
-			show::version
-			echo "shell latest version sha256sum: $REMOTE_HASH"
-			echo "shell local version sha256sum: $LOCAL_HASH"
-			exit 0
-			shift
-			;;
-        -h|--help)
-            show::help
-            ;;
-        -*)
-            echo "unknown command: $1"
-            show::help
-            ;;
-        *)
-            echo "unknown Options: $1"
-            show::help
-            ;;
-    esac
-done
-
-prefixmirror=${prefix:+$prefix - }
-prefixpath=${prefix:+$prefix-}
 
 #### 执行函数区域 ####
 [[ $options_yum -eq 1 ]] && conf::reposource
-
-if [[ $installlock -eq 0 ]]; then
-	touch /root/.toolbox-install-init.lock
-	# 检查是否已有 swap 文件存在
-	swap_file=$(swapon --show=NAME | grep -E '/toolbox-swap')
-
-	if [ -n "$swap_file" ];then
-		echo "虚拟内存已存在"
-	else
-	    memory=`free -m | awk '/^Mem:/ {print $2}'`
-	    if [ $memory -lt 1024 ] || [ $options_swap -eq 1 ];then
-	        echo "设置虚拟内存"
-	        if [ -z $options_swap_value ];then
-	            swapsize=$[1024*2];
-	        else
-	            swapsize=$options_swap_value
-	        fi
-	            cat > /etc/sysctl.conf << EOF
-$(egrep -v '^vm.swappiness' /etc/sysctl.conf)
-EOF
-	        echo "vm.swappiness=60" >> /etc/sysctl.conf
-	        dd if=/dev/zero of=/toolbox-swap bs=1M count=$swapsize
-	        chmod 0600 /toolbox-swap
-	        mkswap -f /toolbox-swap
-	        swapon /toolbox-swap
-	        echo "/toolbox-swap    swap    swap    defaults    0 0" >> /etc/fstab
-	        mount -a
-	        sysctl -p
-	    fi
-	fi
-	install::main
-fi
-
+[[ $options_swap -eq 1 ]] && manager::swap
 [[ $options_bt -eq 1 ]] && install::bt
 [[ $options_kernel_update -eq 1 ]] && install::kernel
 [[ $options_tuning -eq 1 ]] && conf::tuning
