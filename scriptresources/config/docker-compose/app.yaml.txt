@@ -1,0 +1,74 @@
+services:
+  apps-openlist:
+    container_name: apps-openlist
+    image: docker.m.daocloud.io/openlistteam/openlist:latest-aio
+    volumes:
+      - /server/openlist/data:/opt/openlist/data
+    ports:
+      - 5244:5244
+    environment:
+      - PUID=0
+      - PGID=0
+      - UMASK=022
+    restart: always
+  apps-qinglong:
+    container_name: apps-qinglong
+    image: docker.m.daocloud.io/whyour/qinglong
+    volumes:
+      - /server/qinglong/data:/ql/data
+    ports:
+      - 5700:5700
+    environment:
+      QlBaseUrl: '/'
+    restart: always
+  app-certd:
+    image: registry.cn-shenzhen.aliyuncs.com/handsfree/certd
+    container_name: apps-certd
+    ports:
+      - 7001:7001
+      - 7002:7002
+    volumes:
+      - /server/certd:/app/data
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    environment:
+      - certd_system_resetAdminPasswd=false
+    restart: always
+  apps-autorestart:
+    container_name: apps-autorestart
+    image: docker.m.daocloud.io/willfarrell/autoheal
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=all
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+  apps-autoupdate:
+    command: '--cleanup -i 3600'
+    image: docker.m.daocloud.io/containrrr/watchtower
+    container_name: apps-autoupdate
+    volumes:
+      - '/etc/docker/daemon.json:/etc/docker/daemon.json'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+      - '/root/.docker/config.json:/config.json'
+    environment:
+      - TZ=Asia/Shanghai
+    restart: always
+#   apps-mihoyo-bbs:
+#     image: womsxd/mihoyo-bbs
+#     container_name: apps-mihoyo-bbs 
+#     restart: always
+#     environment:
+#       - CRON_SIGNIN=30 9 * * *
+#       - MULTI=TRUE
+#     volumes:
+#       - /server/MihoyoBBSTools:/var/app
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "1m"
+#   apps-jd-autologin:
+#     image: icepage/aujc
+#     container_name: apps-jd-autologin
+#     restart: always
+#     volumes:
+#       - /server/jd/config.py:/app/config.py

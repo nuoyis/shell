@@ -26,6 +26,7 @@ options_docker_app=0
 options_nas=0
 options_ollama=0
 options_bt=0
+# ---------- 菜单集合 ----------
 show::help(){
 	IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
   --install            install nuoyis toolbox and autoupdate
@@ -219,9 +220,9 @@ done
 prefixmirror=${prefix:+$prefix - }
 prefixpath=${prefix:+$prefix-}
 
-#########################
-#### 自动变量初始化区域 ####
-#########################
+##########################
+###  自动变量初始化区域  ###
+##########################
 # 脚本执行时间统计
 startTime=`date +%Y%m%d-%H:%M:%S`
 startTime_s=`date +%s`
@@ -667,47 +668,7 @@ use_localtime=YES
 pam_service_name=vsftpd
 EOF
 
-cat > /etc/samba/smb.conf <<EOF
-# See smb.conf.example for a more detailed config file or
-# read the smb.conf manpage.
-# Run 'testparm' to verify the config is correct after
-# you modified it.
-#
-# Note:
-# SMB1 is disabled by default. This means clients without support for SMB2 or
-# SMB3 are no longer able to connect to smbd (by default).
-
-[global]
-	workgroup = SAMBA
-	security = user
-	passdb backend = tdbsam
-	printing = cups
-	printcap name = cups
-	load printers = yes
-	cups options = raw
-	map to guest = bad user
-
-[homes]
-	comment = Home Directories
-	valid users = %S, %D%w%S
-	browseable = No
-	read only = No
-	inherit acls = Yes
-
-[printers]
-	comment = All Printers
-	path = /var/tmp
-	printable = Yes
-	create mask = 0600
-	browseable = No
-
-[print$]
-	comment = Printer Drivers
-	path = /var/lib/samba/drivers
-	write list = @printadmin root
-	force group = @printadmin
-	create mask = 0664
-	directory mask = 0775
+cat >> /etc/samba/smb.conf <<EOF
 
 [share]
         comment = share
@@ -724,7 +685,7 @@ EOF
 
 # cat >> /etc/profile << EOF
 # echo "################################"
-# echo "#  Welcome  to  visit  NAS  #"
+# echo "#  Welcome  to  visit  NAS     #"
 # echo "################################"
 # EOF
 
@@ -892,89 +853,15 @@ install::docker(){
 	if [ -f "/usr/bin/docker-compose" ];then
 		echo "docker-compose 二进制文件已存在"
 	else
-		manager::nuoyis::download download/docker-compose/v2.33.0/docker-compose-linux-"$(uname -m)" /usr/bin/docker-compose
+		manager::nuoyis::download scriptresources/download/docker-compose/v2.33.0/docker-compose-linux-"$(uname -m)" /usr/bin/docker-compose
 		chmod +x /usr/bin/docker-compose
 	fi
 }
 
 install::dockerapp(){
-	cat > /${prefixpath}server/docker-yaml/app.yaml <<EOF
-services:
-  apps-openlist:
-    container_name: apps-openlist
-    image: docker.m.daocloud.io/openlistteam/openlist:latest-aio
-    volumes:
-      - /${prefixpath}server/openlist/data:/opt/openlist/data
-    ports:
-      - 5244:5244
-    environment:
-      - PUID=0
-      - PGID=0
-      - UMASK=022
-    restart: always
-  apps-qinglong:
-    container_name: apps-qinglong
-    image: docker.m.daocloud.io/whyour/qinglong
-    volumes:
-      - /${prefixpath}server/qinglong/data:/ql/data
-    ports:
-      - 5700:5700
-    environment:
-      QlBaseUrl: '/'
-    restart: always
-  app-certd:
-    image: registry.cn-shenzhen.aliyuncs.com/handsfree/certd
-    container_name: apps-certd
-    ports:
-      - 7001:7001
-      - 7002:7002
-    volumes:
-      - /${prefixpath}server/certd:/app/data
-    labels:
-      com.centurylinklabs.watchtower.enable: "true"
-    environment:
-      - certd_system_resetAdminPasswd=false
-    restart: always
-  apps-autorestart:
-    container_name: apps-autorestart
-    image: docker.m.daocloud.io/willfarrell/autoheal
-    environment:
-      - AUTOHEAL_CONTAINER_LABEL=all
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    restart: always
-  apps-autoupdate:
-    command: '--cleanup -i 3600'
-    image: docker.m.daocloud.io/containrrr/watchtower
-    container_name: apps-autoupdate
-    volumes:
-      - '/etc/docker/daemon.json:/etc/docker/daemon.json'
-      - '/var/run/docker.sock:/var/run/docker.sock'
-      - '/root/.docker/config.json:/config.json'
-    environment:
-      - TZ=Asia/Shanghai
-    restart: always
-#   apps-mihoyo-bbs:
-#     image: womsxd/mihoyo-bbs
-#     container_name: apps-mihoyo-bbs 
-#     restart: always
-#     environment:
-#       - CRON_SIGNIN=30 9 * * *
-#       - MULTI=TRUE
-#     volumes:
-#       - /${prefixpath}server/MihoyoBBSTools:/var/app
-#     logging:
-#       driver: "json-file"
-#       options:
-#         max-size: "1m"
-#   apps-jd-autologin:
-#     image: icepage/aujc
-#     container_name: apps-jd-autologin
-#     restart: always
-#     volumes:
-#       - /${prefixpath}server/jd/config.py:/app/config.py
-EOF
-docker-compose -f /${prefixpath}server/docker-yaml/app.yaml up -d
+	manager::nuoyis::download scriptresources/config/docker-compose/app.yaml.txt /${prefixpath}server/docker-yaml/app.yaml
+	sed -i "s/\/server/\/${prefixpath}server/g" /${prefixpath}server/docker-yaml/app.yaml
+	docker-compose -f /${prefixpath}server/docker-yaml/app.yaml up -d
 }
 
 install::ollama(){
@@ -991,80 +878,16 @@ install::lnmp::quick(){
 	else
 		manager::repositories install nginx php8.4 php8.4-cli php8.4-fpm php8.4-mysql php8.4-xml php8.4-mbstring php8.4-curl mariadb-server
 	fi
-	cat > /etc/nginx/nginx.conf <<EOF
-user web;
-worker_processes auto;
-worker_rlimit_nofile 65535;
-
-events {
-    worker_connections 2048;
-}
-
-http {
-    include       mime.types;
-    default_type  application/octet-stream;
-
-    #log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
-    #                  '\$status \$body_bytes_sent "\$http_referer" '
-    #                  '"\$http_user_agent" "\$http_x_forwarded_for"';
-
-    #access_log  logs/access.log  main;
-
-    sendfile        on;
-    #tcp_nopush     on;
-
-    #keepalive_timeout  0;
-    keepalive_timeout  65;
-
-    gzip on;
-    gzip_comp_level 5;
-    gzip_min_length 256;
-    gzip_types text/plain application/xml text/css application/javascript application/json image/svg+xml;
-    gzip_proxied any;
-
-    open_file_cache max=1000 inactive=20s;
-    open_file_cache_valid 30s;
-    open_file_cache_errors off;
-
-    client_body_buffer_size 16K;
-    client_max_body_size 10M;
-
-    # 其他页面
-    include /${prefixpath}server/web/nginx/conf/*.conf;
-}
-EOF
-cat > /${prefixpath}server/web/nginx/conf/default.conf << EOF
- # 默认页面的 server 配置
-server {
-    listen 80 default_server;
-    listen 443 default_server ssl;
-    server_name _;
-    # SSL 配置
-    ssl_certificate /${prefixpath}server/web/nginx/server/conf/ssl/default.pem;
-    ssl_certificate_key /${prefixpath}server/web/nginx/server/conf/ssl/default.key;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
-    ssl_prefer_server_ciphers on;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 10m;
-
-    charset utf-8;
-    root /${prefixpath}server/web/nginx/webside/default;
-    index index.html;
-
-    # 错误页面配置
-    error_page 404 /404.html;
-    error_page 500 502 503 504 /50x.html;
-
-    # include start-php-81.conf; 
-}
-EOF
-			cat > /${prefixpath}server/web/nginx/webside/default/index.html << EOF
+	manager::nuoyis::download scriptresources/config/nginx/nginx.conf.txt /etc/nginx/nginx.conf
+	manager::nuoyis::download scriptresources/config/nginx/default.conf.txt /${prefixpath}server/web/nginx/conf/default.conf
+	sed -i "s#/server#/${prefixpath}server#g" /etc/nginx/nginx.conf
+	sed -i "s#/server#/${prefixpath}server#g"/${prefixpath}server/web/nginx/conf/default.conf
+	cat > /${prefixpath}server/web/nginx/webside/default/index.html << EOF
 welcome to nuoyis's server
 EOF
-			curl -k -L -o /${prefixpath}server/web/nginx/server/conf/ssl/default.pem https://lnmp.nuoyis.net/config/ssl/default.pem
-			curl -k -L -o /${prefixpath}server/web/nginx/server/conf/ssl/default.key https://lnmp.nuoyis.net/config/ssl/default.key
-			manager::systemctl start nginx php-fpm mariadb
+	curl -k -L -o /${prefixpath}server/web/nginx/server/conf/ssl/default.pem https://lnmp.nuoyis.net/config/ssl/default.pem
+	curl -k -L -o /${prefixpath}server/web/nginx/server/conf/ssl/default.key https://lnmp.nuoyis.net/config/ssl/default.key
+	manager::systemctl start nginx php-fpm mariadb
 }
 
 install::lnmp::gcc(){
@@ -1076,8 +899,8 @@ install::lnmp::gcc(){
 		manager::repositories install autoconf bison re2c make procps gcc g++ iputils-ping pkg-config libpcre3 libpcre3-dev zlib1g-dev openssl libssl-dev libxslt1-dev libpng-dev libjpeg-dev libfreetype6-dev libxml2-dev libsqlite3-dev libbz2-dev libcurl4-openssl-dev libxpm-dev libzip-dev libonig-dev libgd-dev libgeoip-dev
 	fi
 	cd /nuoyis-install
-	manager::nuoyis::download download/nginx/nginx-1.29.1.tar.gz
-	manager::nuoyis::download download/php/php-8.4.20.tar.gz
+	manager::nuoyis::download scriptresources/download/nginx/nginx-1.29.1.tar.gz
+	manager::nuoyis::download scriptresources/download/php/php-8.4.20.tar.gz
 	tar -xzvf nginx-1.29.1.tar.gz
 	tar -xzvf php-8.4.20.tar.gz
 	cd nginx-1.29.1
@@ -1176,10 +999,10 @@ curl -k -L -o /${prefixpath}server/web/nginx/conf/nginx.conf.succinct.template h
 curl -k -L -o /${prefixpath}server/web/nginx/conf/default.conf.init https://lnmp.nuoyis.net/config/default.conf.txt
 
 # 替换为实际路径
-sed -i "s#/web#/${prefixpath}server/web#g" /${prefixpath}server/web/nginx/server/conf/nginx.conf
-sed -i "s#/web/nginx#/${prefixpath}server/web/nginx#g" /${prefixpath}server/web/nginx/conf/default.conf.init
-sed -i "s#/web#/${prefixpath}server/web#g" /${prefixpath}server/web/php/etc/php-fpm.d/fpm.conf
-sed -i "s#/web#/${prefixpath}server/web#g" /${prefixpath}server/web/php/etc/php.ini
+sed -i "s#/web#/${prefixpath}server/web#g"                                                                 /${prefixpath}server/web/nginx/server/conf/nginx.conf
+sed -i "s#/web/nginx#/${prefixpath}server/web/nginx#g"                                                     /${prefixpath}server/web/nginx/conf/default.conf.init
+sed -i "s#/web#/${prefixpath}server/web#g"                                                                 /${prefixpath}server/web/php/etc/php-fpm.d/fpm.conf
+sed -i "s#/web#/${prefixpath}server/web#g"                                                                 /${prefixpath}server/web/php/etc/php.ini
 sed -i -e "s#/web/nginx#/${prefixpath}server/web/nginx#g" -e "s#/web/logs#/${prefixpath}server/web/logs#g" /${prefixpath}server/web/nginx/conf/nginx.conf.full.template
 sed -i -e "s#/web/nginx#/${prefixpath}server/web/nginx#g" -e "s#/web/logs#/${prefixpath}server/web/logs#g" /${prefixpath}server/web/nginx/conf/nginx.conf.succinct.template
 
@@ -1208,83 +1031,7 @@ install::lnmp::docker(){
     fi
 	touch /${prefixpath}server/docker-yaml/docker-lnmp.yaml
 	touch /${prefixpath}server/web/mariadb/config/my.cnf
-	cat > /${prefixpath}server/docker-yaml/docker-lnmp.yaml << EOF
-services:
-  lnmp-np:
-    container_name: lnmp-np
-    image: registry.cn-hangzhou.aliyuncs.com/nuoyis/lnmp-np:latest
-    networks: 
-      lnmp-net:
-        aliases:
-          - lnmp-np
-    ports:
-      - 80:80
-      - 443:443
-      - 443:443/udp
-    volumes:
-      # nginx 配置文件
-      - /${prefixpath}server/web/nginx/conf:/web/nginx/conf
-      # nginx 网站目录
-      - /${prefixpath}server/web/nginx/webside:/web/nginx/webside
-      # nginx ssl
-      - /${prefixpath}server/web/nginx/ssl:/web/nginx/ssl
-      # Log 目录
-      - /var/log/web:/web/logs
-EOF
-	if [[ $options_nas == 1 ]];then
-		cat >> /${prefixpath}server/docker-yaml/docker-lnmp.yaml << EOF
-      # nas file
-      - /${prefixpath}server/sharefile:/web/sharefile
-EOF
-	fi
-	cat >> /${prefixpath}server/docker-yaml/docker-lnmp.yaml << EOF
-    environment:
-      TIME_ZONE: Asia/Shanghai
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost"]
-      interval: 30s
-      retries: 3
-      start_period: 10s
-      timeout: 10s
-    user: "\${SUID}:\${SGID}"
-    restart: always
-
-  lnmp-mariadb:
-    container_name: lnmp-mariadb
-    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mariadb:latest
-    networks: 
-      lnmp-net:
-        aliases:
-          - lnmp-mariadb
-    environment:
-      TIME_ZONE: Asia/Shanghai
-      MYSQL_ROOT_PASSWORD: "$options_mariadb_value"
-    volumes:
-      - /${prefixpath}server/web/mariadb/init:/docker-entrypoint-initdb.d
-      - /${prefixpath}server/web/mariadb/server:/var/lib/mysql
-      - /${prefixpath}server/web/mariadb/import:/web/mariadb/import
-      - /${prefixpath}server/web/mariadb/config/my.cnf:/etc/mysql/my.cnf
-    ports:
-      - 3306:3306
-    shm_size: '1g'
-    healthcheck:
-      test: ["CMD", "sh", "-c", "mariadb -u root -p$\$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM information_schema.tables LIMIT 1;'"]
-      interval: 30s
-      retries: 3
-      start_period: 10s
-      timeout: 10s
-    restart: always
-
-networks:
-  lnmp-net:
-    name: lnmp-net
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 192.168.223.0/24
-          gateway: 192.168.223.1
-EOF
+	manager::nuoyis::download scriptresources/config/docker-compose/docker-lnmp.yaml.txt /${prefixpath}server/docker-yaml/docker-lnmp.yaml
 	cat > /${prefixpath}server/web/mariadb/config/my.cnf << EOF
 [mysqld]
 server-id=1
@@ -1478,11 +1225,11 @@ conf::reposource::redhat(){
 	rpm -e --nodeps openssl-fips-provider
 	rpm -e --nodeps redhat-logos
 	rpm -e --nodeps redhat-release
-	rpm --import https://shell.nuoyis.net/download/RPM-GPG-KEY-Rocky-9
-	manager::download https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
-	manager::download https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
-	manager::download https://shell.nuoyis.net/download/rocky-repos-9.5-1.2.el9.noarch.rpm
-	manager::download https://shell.nuoyis.net/download/rocky-release-9.5-1.2.el9.noarch.rpm
+	rpm --import https://shell.nuoyis.net/scriptresources/download/RPM-GPG-KEY-Rocky-9
+	manager::nuoyis::download scriptresources/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
+	manager::nuoyis::download scriptresources/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+	manager::nuoyis::download scriptresources/download/rocky-repos-9.5-1.2.el9.noarch.rpm
+	manager::nuoyis::download scriptresources/download/rocky-release-9.5-1.2.el9.noarch.rpm
 	sudo rm -rf /usr/share/redhat-release
 	rpm -ivh --force --nodeps openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm
 	rpm -ivh --force --nodeps openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
@@ -1495,7 +1242,7 @@ conf::reposource::redhat(){
 	rm -rf /etc/yum.repos.d/rocky*.repo
 	# 可视化处理
 	# sudo dnf groupinstall "Server with GUI"
-	# manager::repositories install https://shell.nuoyis.net/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
+	# manager::repositories install https://shell.nuoyis.net/scriptresources/download/openssl-devel-3.0.7-27.el9.0.2.x86_64.rpm https://shell.nuoyis.net/scriptresources/download/openssl-libs-3.0.7-27.el9.0.2.x86_64.rpm
 	if [ -d /sys/firmware/efi ] && [ -d /boot/efi/EFI/redhat ];then
 		echo "你的Boot分区为EFI，正在进行特别优化"
 		mv /boot/efi/EFI/redhat/ /boot/efi/EFI/rocky
@@ -1542,6 +1289,7 @@ conf::reposource(){
 			# yum系统判断
 			case "$system_name" in
 				"openeuler")
+					sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
 				;;
 				"Rocky")
 					echo "正在检查是否存在冲突/模块缺失"
@@ -1644,9 +1392,9 @@ if [ $PM = "yum" ] || [ $PM = "dnf" ];then
 		manager::repositories remove kernel-tools-libs.x86_64 kernel-tools.x86_64
 		manager::repositories installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml-tools.x86_64
 	elif [ $system_version -eq 7 ];then
-		manager::nuoyis::download download/kernel/centos/7/kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
-		manager::nuoyis::download download/kernel/centos/7/kernel-lt-headers-5.4.226-1.el7.elrepo.x86_64.rpm
-		manager::nuoyis::download download/kernel/centos/7/kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
+		manager::nuoyis::download scriptresources/download/kernel/centos/7/kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
+		manager::nuoyis::download scriptresources/download/kernel/centos/7/kernel-lt-headers-5.4.226-1.el7.elrepo.x86_64.rpm
+		manager::nuoyis::download scriptresources/download/kernel/centos/7/kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
     	rpm -ivh kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
     	rpm -ivh kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
     	yum remove kernel-headers -y

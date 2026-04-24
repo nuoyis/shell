@@ -1,0 +1,69 @@
+services:
+  lnmp-np:
+    container_name: lnmp-np
+    image: registry.cn-hangzhou.aliyuncs.com/nuoyis/lnmp-np:latest
+    networks: 
+      lnmp-net:
+        aliases:
+          - lnmp-np
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    volumes:
+      # nginx 配置文件
+      - /server/web/nginx/conf:/web/nginx/conf
+      # nginx 网站目录
+      - /server/web/nginx/webside:/web/nginx/webside
+      # nginx ssl
+      - /server/web/nginx/ssl:/web/nginx/ssl
+      # Log 目录
+      - /var/log/web:/web/logs
+      # nas file
+      - /server/sharefile:/web/sharefile
+    environment:
+      TIME_ZONE: Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      retries: 3
+      start_period: 10s
+      timeout: 10s
+    user: "\${SUID}:\${SGID}"
+    restart: always
+
+  lnmp-mariadb:
+    container_name: lnmp-mariadb
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mariadb:latest
+    networks: 
+      lnmp-net:
+        aliases:
+          - lnmp-mariadb
+    environment:
+      TIME_ZONE: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: "$options_mariadb_value"
+    volumes:
+      - /server/web/mariadb/init:/docker-entrypoint-initdb.d
+      - /server/web/mariadb/server:/var/lib/mysql
+      - /server/web/mariadb/import:/web/mariadb/import
+      - /server/web/mariadb/config/my.cnf:/etc/mysql/my.cnf
+    ports:
+      - 3306:3306
+    shm_size: '1g'
+    healthcheck:
+      test: ["CMD", "sh", "-c", "mariadb -u root -p$\$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM information_schema.tables LIMIT 1;'"]
+      interval: 30s
+      retries: 3
+      start_period: 10s
+      timeout: 10s
+    restart: always
+
+networks:
+  lnmp-net:
+    name: lnmp-net
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.223.0/24
+          gateway: 192.168.223.1
