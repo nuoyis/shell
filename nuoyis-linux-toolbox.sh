@@ -8,6 +8,7 @@
 #########################
 #### 手动变量定义区域 ####
 #########################
+shopt -s nullglob
 # 环境变量设置
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
@@ -287,9 +288,18 @@ if command -v yum >/dev/null 2>&1 && [ -d /etc/yum.repos.d ]; then
     case "$system_name" in
         CentOS)
             case "$system_version" in
-                7)
+                [0-7])
 					osname="centos-vault";
 					osversion="7.9.2009"
+					gpgcheck=0
+					gpgkey="https://${mirror_url}/centos-vault/RPM-GPG-KEY-CentOS-7"
+					repos=(
+						"baseOS os/\$basearch/"
+        			    "updates updates/\$basearch/"
+        			    "extras extras/\$basearch/"
+        			    "centosplus centosplus/\$basearch/"
+        			    "cr cr/\$basearch/"
+        			)
 					;;
                 8)
 					osname="centos-vault";
@@ -299,22 +309,69 @@ if command -v yum >/dev/null 2>&1 && [ -d /etc/yum.repos.d ]; then
 					else
 						osversion="8.5.2111"
 					fi
+					gpgcheck=0
+					gpgkey="https://${mirror_url}/centos/RPM-GPG-KEY-CentOS-Official"
+					repos=(
+						"baseOS BaseOS/\$basearch/os/"
+						"appstream AppStream/\$basearch/os/"
+        			    "HighAvailability HighAvailability/\$basearch/os/"
+        			    "extras extras/\$basearch/os/"
+        			    "PowerTools PowerTools/\$basearch/os/"
+        			    "centosplus centosplus/\$basearch/os/"
+        			)
 					;;
                 *)
 					osname="centos-stream";
 					osversion="\$releasever-stream"
+					gpgcheck=0
+					gpgkey="https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official-SHA256"
+        			repos=(
+						"baseos BaseOS/\$basearch/os/"
+        			    "baseos-debug BaseOS/\$basearch/debug/tree/"
+        			    "baseos-source BaseOS/source/tree/"
+						"appstream AppStream/\$basearch/os/"
+        			    "appstream-debug AppStream/\$basearch/debug/tree/"
+        			    "appstream-source AppStream/source/tree/"
+        			    "crb CRB/\$basearch/os/"
+        			    "crb-debug CRB/\$basearch/debug/tree/"
+        			    "crb-source CRB/source/tree/"
+        			)
 					;;
             esac
             ;;
         openEuler)
-            osname="openeuler"
-            ;;
+			eval $(grep -oP '(?<=PRETTY_NAME=").*(?=")' /etc/os-release | awk '{gsub(/[()]/,""); split($3,a,"-"); printf("ver=%s type=%s sp=%s\n",$2,a[1],a[2])}'); osname="openeuler-${ver}${type:+-$type}${sp:+-$sp}"
+			osname="openeuler"
+			osversion="openEuler-${ver}${type:+-$type}${sp:+-$sp}"
+			gpgcheck=0
+			gpgkey="https://${mirror_url}/${osversion}/OS/\$basearch/RPM-GPG-KEY-openEuler"
+        	repos=(
+				"OS OS/\$basearch/"
+				"everything everything/\$basearch/"
+				"EPOL EPOL/main/\$basearch/"
+				"debuginfo debuginfo/\$basearch/"
+				"source source/"
+				"update update/\$basearch/"
+				"update-source update/source/"
+        	)
+			;;
 		Rocky)
 			case "$options_yum_install" in
             	edu)      osname="rocky" ;;
             	aliyun)   osname="rockylinux" ;;
             	original) osname="pub/rocky" ;;
         	esac
+			gpgcheck=1
+        	gpgkey="https://${mirror_url}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever"
+        	repos=(
+        	    "baseos-debug BaseOS/\$basearch/debug/tree/"
+        	    "baseos-source BaseOS/source/tree/"
+        	    "appstream-debug AppStream/\$basearch/debug/tree/"
+        	    "appstream-source AppStream/source/tree/"
+        	    "crb CRB/\$basearch/os/"
+        	    "crb-debug CRB/\$basearch/debug/tree/"
+        	    "crb-source CRB/source/tree/"
+        	)
 			;;
     esac
 
@@ -1098,55 +1155,10 @@ EOF
 }
 
 conf::reposource::yum(){
-	case "$system_version" in
-		[0-7])
-			gpgcheck=0
-			gpgkey="https://mirrors.aliyun.com/centos-vault/RPM-GPG-KEY-CentOS-7"
-			repos=(
-        	    "updates updates/\$basearch/"
-        	    "extras extras/\$basearch/"
-        	    "centosplus centosplus/\$basearch/"
-        	    "cr cr/\$basearch/"
-        	)
-			;;
-		8)
-			gpgcheck=0
-			gpgkey="https://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-Official"
-        	repos=(
-        	    "HighAvailability HighAvailability/\$basearch/os/"
-        	    "extras extras/\$basearch/os/"
-        	    "PowerTools PowerTools/\$basearch/os/"
-        	    "centosplus centosplus/\$basearch/os/"
-        	)
-			;;
-		*)
-			gpgcheck=1
-        	gpgkey="https://${mirror_url}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever"
-        	repos=(
-        	    "baseos-debuginfo BaseOS/\$basearch/debug/tree/"
-        	    "baseos-source BaseOS/source/tree/"
-        	    "appstream-debuginfo AppStream/\$basearch/debug/tree/"
-        	    "appstream-source AppStream/source/tree/"
-        	    "crb CRB/\$basearch/os/"
-        	    "crb-debuginfo CRB/\$basearch/debug/tree/"
-        	    "crb-source CRB/source/tree/"
-        	)
-			;;
-	esac
-
-	# ---------- 其他仓库 ----------
 	for repo in "${repos[@]}"; do
         set -- $repo
-        conf::reposource::yum::repowrite "$1" "$2" "$3"
+        conf::reposource::yum::repowrite "$1" "$2"
     done
-
-	# ---------- 通用仓库 ----------
-	if [ $system_version -ge 8 ]; then
-		conf::reposource::yum::repowrite "baseOS" "BaseOS/\$basearch/os/"
-    	conf::reposource::yum::repowrite "appstream" "AppStream/\$basearch/os/"
-	else
-		conf::reposource::yum::repowrite "baseOS" "os/\$basearch/"
-	fi
 
 	sed -i '/^skip_broken/d; /^max_parallel_downloads/d; /^metadata_expire/d' $PMpath
 	echo "skip_broken=True" >> $PMpath
@@ -1156,40 +1168,42 @@ conf::reposource::yum(){
 
 conf::reposource::yum_additional_source(){
 	echo "正在配置附加源"
-	if [ $system_version -ge 8 ]; then
-		manager::repositories install https://mirrors.aliyun.com/epel/epel-release-latest-$system_version.noarch.rpm
-		if [ $system_version -lt 10 ]; then
-			rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
+	if [ $system_name != "openEuler" ];then
+		if [ $system_version -ge 8 ]; then
+			manager::repositories install https://mirrors.aliyun.com/epel/epel-release-latest-$system_version.noarch.rpm
+			if [ $system_version -lt 10 ]; then
+				rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
+			else
+				rpm --import https://www.elrepo.org/RPM-GPG-KEY-v2-elrepo.org
+			fi
+			rm -rf /etc/yum.repos.d/epel-cisco-openh264.repo
+			sed -e 's!^metalink=!#metalink=!g' \
+				-e 's!^#baseurl=!baseurl=!g' \
+				-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
+				-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
+				-i /etc/yum.repos.d/epel{,*}.repo
+			manager::repositories install https://mirrors.aliyun.com/remi/enterprise/remi-release-$system_version.rpm
+			sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+				-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+				-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+				-i  /etc/yum.repos.d/remi*.repo
+			manager::repositories install https://www.elrepo.org/elrepo-release-$system_version.el$system_version.elrepo.noarch.rpm
+			sed -e 's/http:\/\/elrepo.org\/linux/https:\/\/mirrors.aliyun.com\/elrepo/g' \
+				-e 's/mirrorlist=/#mirrorlist=/g' \
+				-i /etc/yum.repos.d/elrepo.repo
 		else
-			rpm --import https://www.elrepo.org/RPM-GPG-KEY-v2-elrepo.org
-		fi
-		rm -rf /etc/yum.repos.d/epel-cisco-openh264.repo
-		sed -e 's!^metalink=!#metalink=!g' \
-			-e 's!^#baseurl=!baseurl=!g' \
-			-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
-			-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
-			-i /etc/yum.repos.d/epel{,*}.repo
-		manager::repositories install https://mirrors.aliyun.com/remi/enterprise/remi-release-$system_version.rpm
-		sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-			-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-			-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-			-i  /etc/yum.repos.d/remi*.repo
-		manager::repositories install https://www.elrepo.org/elrepo-release-$system_version.el$system_version.elrepo.noarch.rpm
-		sed -e 's/http:\/\/elrepo.org\/linux/https:\/\/mirrors.aliyun.com\/elrepo/g' \
-			-e 's/mirrorlist=/#mirrorlist=/g' \
-			-i /etc/yum.repos.d/elrepo.repo
-	else
-		manager::repositories install https://${mirror_url}/remi/enterprise/remi-release-$system_version.rpm
+			manager::repositories install https://${mirror_url}/remi/enterprise/remi-release-$system_version.rpm
 
-		sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-			-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-			-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
-			-i  /etc/yum.repos.d/remi*.repo
-		sed -e 's!^metalink=!#metalink=!g' \
-			-e 's!^#baseurl=!baseurl=!g' \
-			-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
-			-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
-			-i /etc/yum.repos.d/epel{,*}.repo
+			sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+				-e 's|^#baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+				-e 's|^baseurl=http://rpms.remirepo.net|baseurl=http://mirrors.tuna.tsinghua.edu.cn/remi|g' \
+				-i  /etc/yum.repos.d/remi*.repo
+			sed -e 's!^metalink=!#metalink=!g' \
+				-e 's!^#baseurl=!baseurl=!g' \
+				-e 's!https\?://download\.fedoraproject\.org/pub/epel!https://mirrors.aliyun.com/epel!g' \
+				-e 's!https\?://download\.example/pub/epel!https://mirrors.aliyun.com/epel!g' \
+				-i /etc/yum.repos.d/epel{,*}.repo
+		fi
 	fi
 }
 
@@ -1286,10 +1300,11 @@ conf::reposource(){
 				manager::repositories remove elrepo-release.noarch
 			fi
 
+			echo "正在配置源"
 			# yum系统判断
 			case "$system_name" in
-				"openeuler")
-					sed -i "s/http:\/\/repo.openeuler.org/https:\/\/mirrors.aliyun.com\/openeuler/g" /etc/yum.repos.d/openEuler.repo
+				"openEuler")
+					conf::reposource::yum
 				;;
 				"Rocky")
 					echo "正在检查是否存在冲突/模块缺失"
