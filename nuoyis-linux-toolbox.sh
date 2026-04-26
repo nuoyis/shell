@@ -48,9 +48,9 @@ show::help(){
   -mp, --mariadbpassword config lnmp-mariadb password set  
   -h,  --help          show shell help
   -sha, --sha256sum    show shell's sha256sum
-  exam1:           nuoyis-toolbox -n nuoyis -host nuoyis-shanghai-1 -r aliyun -ln docker -tu -mp 123456 -na
-  exam2(overseas): nuoyis-toolbox -n nuoyis -host nuoyis-us-1 -r original -ln docker -tu -mp 123456 -na
-  exam3(btpanel):  nuoyis-toolbox -n nuoyis -host nuoyis-us-1 -r aliyun -bt
+  exam1:           nuoyis-toolbox -initname nuoyis -host nuoyis-shanghai-1 -r aliyun -ln docker -tu -mp 123456 -na
+  exam2(overseas): nuoyis-toolbox -initname nuoyis -host nuoyis-us-1 -r original -ln docker -tu -mp 123456 -na
+  exam3(btpanel):  nuoyis-toolbox -initname nuoyis -host nuoyis-us-1 -r aliyun -bt
 EOF
 
 echo "welcome to use nuoyis's toolbox"
@@ -68,25 +68,25 @@ exit 0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-	    --install)
+	    -install)
 			options_install=1
 		    shift
 		    ;;
-		--remove)
+		-remove)
 			rm -rf /usr/bin/nuoyis-toolbox
 			crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab -
 			exit 0
 			shift
 			;;
-        -n|--name)
+        -n|-name|-initname)
             prefix=$2
             shift 2
             ;;
-        -host|--hostname)
+        -host|-hostname)
             hostnamectl set-hostname $2
             shift 2
             ;;
-        -r|--mirror)
+        -r|-mirror)
             if [[ "$2" != "aliyun" && "$2" != "edu" && "$2" != "original" && "$2" != "other" ]]; then
                 echo "unknown volume: $2"
                 show::help
@@ -97,11 +97,11 @@ while [[ $# -gt 0 ]]; do
             # conf::reposource
             shift 2
             ;;
-		-ru|--mirrorupdate)
+		-ru|-mirrorupdate)
 			mirror_update=1
 			shift
 			;;
-        -ln|--lnmp)
+        -ln|-lnmp)
             if [[ "$2" != "gcc" && "$2" != "docker" && "$2" != "yum" ]]; then
                 echo "unknown volume: $2"
                 show::help
@@ -114,34 +114,34 @@ while [[ $# -gt 0 ]]; do
             # install::lnmp
             shift 2
             ;;
-		-tu|--tuning)
+		-tu|-tuning)
 			options_tuning=1
 			shift
 			;;
-		-ku|--kernelupdate)
+		-ku|-kernelupdate)
 			options_kernel_update=1
 			shift
 			;;
-        -sw|--swap)
+        -sw|-swap)
             options_swap_value=$2
             options_swap=1
             shift 2
             ;;
-        -mp|--mysqlpassword)
+        -mp|-mysqlpassword)
             options_mariadb_value=$2
             shift 2
             ;;
-        -do|--dockerinstall)
+        -do|-dockerinstall)
             # install::docker
             options_docker=1
             shift
             ;;
-		-xyl|--xuanyuanlogin)
+		-xyl|-xuanyuanlogin)
 			options_docker_xuanyuanpro_username=$3
 			options_docker_xuanyuanpro_password=$3
 			shift 3
 			;;
-		-xyu|--xuanyuanurl)
+		-xyu|-xuanyuanurl)
 			if [[ "$2" != https://* ]]; then
     			options_docker_xuanyuanpro_url="https://$2"
 			else
@@ -149,12 +149,12 @@ while [[ $# -gt 0 ]]; do
 			fi
 			shift 2
 			;;
-        -doa|--dockerapp)
+        -doa|-dockerapp)
             # install::docker
             options_docker_app=1
             shift
             ;;
-        -na|--nas)
+        -na|-nas)
             # install::nas
             options_nas=1
 			if [ -z $options_lnmp ];then
@@ -163,28 +163,28 @@ while [[ $# -gt 0 ]]; do
 			fi
             shift
             ;;
-        -oll|--ollama)
+        -oll|-ollama)
             options_ollama=1
             shift
             ;;
-        -bt|--btpanelenable)
+        -bt|-btpanelenable)
             options_bt=1
             shift
             ;;
-		-up|--update)
+		-up|-update)
 			nuoyis_install_mirrors=$2
 			update::version
 			exit 0
 			shift
 			;;
-		-sha|--sha256sum)
+		-sha|-sha256sum)
 			show::version
 			echo "shell latest version sha256sum: $REMOTE_HASH"
 			echo "shell local version sha256sum: $LOCAL_HASH"
 			exit 0
 			shift
 			;;
-        -h|--help)
+        -h|-help)
             show::help
             ;;
         -*)
