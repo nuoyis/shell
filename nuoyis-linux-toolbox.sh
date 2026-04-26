@@ -17,6 +17,7 @@ LANG=en_US.UTF-8
 gpgkey=""
 prefix=""
 mirror_update=0
+options_install=0
 options_yum=0
 options_lnmp=0
 options_tuning=0
@@ -68,28 +69,7 @@ exit 0
 while [[ $# -gt 0 ]]; do
     case "$1" in
 	    --install)
-			echo "检查脚本是否存在/usr/bin/nuoyis-toolbox中"
-			if [ ! -f /usr/bin/nuoyis-toolbox ]; then
-				echo "脚本不存在存在于环境变量，正在下载并创建到/usr/bin/nuoyis-toolbox"
-				if [ -z "$2" ];then
-					read -p "请输入下载渠道，1是gitee加速版，2是github版" nuoyis_install_mirrors
-				else
-					nuoyis_install_mirrors=$2
-				fi
-				while [[ ! "$nuoyis_install_mirrors" =~ ^[1-2]$ ]]; do
-					echo "无效输入，请输入 1 2作为有效选项。"
-					read -p "请输入下载渠道，1是gitee加速版，2是github版" nuoyis_install_mirrors
-				done
-				show::updateurl
-				curl -sSkL -o /usr/bin/nuoyis-toolbox $updateurl
-				chmod +x /usr/bin/nuoyis-toolbox
-				echo "开启crontab 自动更新检测，如果介意请使用 crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab - 删除该行"
-				crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab -
-				(crontab -l 2>/dev/null; echo "0 * * * * /usr/bin/nuoyis-toolbox --update $nuoyis_install_mirrors;") | crontab -
-			else
-				echo "已通过各种方式部署于环境变量中，无需重复安装"
-			fi
-			exit 0
+			options_install=1
 		    shift
 		    ;;
 		--remove)
@@ -512,9 +492,9 @@ manager::repositories(){
 			;;
 		"install")
 			# 安装多个指定的软件包
-			for options_install in ${@:2}
+			for options_repo_install in ${@:2}
 			do
-				yes | $PM install $options_install -y
+				yes | $PM install $options_repo_install -y
 			done
 			;;
 		"update")
@@ -1345,11 +1325,11 @@ conf::reposource(){
 			conf::reposource::deb
 	fi
 	
-	if [[ ! -f /root/.toolbox-install-init.lock ]]; then
+	if [[ $installlock -eq 0 ]]; then
 		echo "正在安装时间同步软件，以及检查时间并同步，防止yum报错"
-		if [ -f /etc/redhat-release ]; then
-	    	yum --setopt=sslverify=0 -y install chrony
-		elif [ -f /etc/debian_version ]; then
+		if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
+	    	yum --setopt=sslverify=0 -y install chrony cronie
+		else
 	    	apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false update -y
 	    	apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false install -y chrony
 		fi
@@ -1644,12 +1624,39 @@ update::version(){
 	fi
 }
 
+install(){
+	echo "检查脚本是否存在/usr/bin/nuoyis-toolbox中"
+	if [ ! -f /usr/bin/nuoyis-toolbox ]; then
+		echo "脚本不存在存在于环境变量，正在下载并创建到/usr/bin/nuoyis-toolbox"
+		if [ -z "$2" ];then
+			read -p "请输入下载渠道，1是gitee加速版，2是github版" nuoyis_install_mirrors
+		else
+			nuoyis_install_mirrors=$2
+		fi
+		while [[ ! "$nuoyis_install_mirrors" =~ ^[1-2]$ ]]; do
+			echo "无效输入，请输入 1 2作为有效选项。"
+			read -p "请输入下载渠道，1是gitee加速版，2是github版" nuoyis_install_mirrors
+		done
+		show::updateurl
+		curl -sSkL -o /usr/bin/nuoyis-toolbox $updateurl
+		chmod +x /usr/bin/nuoyis-toolbox
+		echo "开启crontab 自动更新检测，如果介意请使用 crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab - 删除该行"
+		crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab -
+		(crontab -l 2>/dev/null; echo "0 * * * * /usr/bin/nuoyis-toolbox --update $nuoyis_install_mirrors;") | crontab -
+	else
+		echo "已通过各种方式部署于环境变量中，无需重复安装"
+	fi
+	exit 0
+}
+
+
 echo "判断服务器位置为:$server_location"
 
 #### 执行函数区域 ####
+[[ $options_install -eq 1 ]] && install
 [[ $options_yum -eq 1 ]] && conf::reposource
 [[ $options_swap -eq 1 ]] && manager::swap
-[[ ! -f /root/.toolbox-install-init.lock ]] && install::main && touch /root/.toolbox-install-init.lock
+[[ $installlock -eq 0 ]] && install::main && touch /root/.toolbox-install-init.lock
 [[ $options_bt -eq 1 ]] && install::bt
 [[ $options_kernel_update -eq 1 ]] && install::kernel
 [[ $options_tuning -eq 1 ]] && conf::tuning
