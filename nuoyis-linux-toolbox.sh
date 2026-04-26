@@ -1645,13 +1645,11 @@ update::version(){
 }
 
 echo "判断服务器位置为:$server_location"
-if [[ $installlock -eq 0 ]]; then
-	touch /root/.toolbox-install-init.lock
-fi
 
 #### 执行函数区域 ####
 [[ $options_yum -eq 1 ]] && conf::reposource
 [[ $options_swap -eq 1 ]] && manager::swap
+[[ ! -f /root/.toolbox-install-init.lock ]] && install::main && touch /root/.toolbox-install-init.lock
 [[ $options_bt -eq 1 ]] && install::bt
 [[ $options_kernel_update -eq 1 ]] && install::kernel
 [[ $options_tuning -eq 1 ]] && conf::tuning
