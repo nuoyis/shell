@@ -873,18 +873,29 @@ install::docker(){
     	mirrors+=("https://docker.xuanyuan.me")
     	mirrors+=("https://docker.m.daocloud.io")
     	mirrors+=("https://docker66ccff.lovablewyh.eu.org")
+		json=$(jq -n \
+	    	--arg bip "192.168.100.1/24" \
+	    	--argjson mirrors "$(printf '%s\n' "${mirrors[@]}" | jq -R . | jq -s .)" \
+	    	'{
+	    	    "bip": $bip,
+	    	    "default-address-pools": [
+	    	        { "base": "192.168.100.0/16", "size": 24 }
+	    	    ],
+	    	    "registry-mirrors": $mirrors
+	    	}'
+		)
+	else
+		json=$(jq -n \
+	    	--arg bip "192.168.100.1/24" \
+	    	--argjson mirrors "$(printf '%s\n' "${mirrors[@]}" | jq -R . | jq -s .)" \
+	    	'{
+	    	    "bip": $bip,
+	    	    "default-address-pools": [
+	    	        { "base": "192.168.100.0/16", "size": 24 }
+	    	    ]
+	    	}'
+		)
 	fi
-	json=$(jq -n \
-	    --arg bip "192.168.100.1/24" \
-	    --argjson mirrors "$(printf '%s\n' "${mirrors[@]}" | jq -R . | jq -s .)" \
-	    '{
-	        "bip": $bip,
-	        "default-address-pools": [
-	            { "base": "192.168.100.0/16", "size": 24 }
-	        ],
-	        "registry-mirrors": $mirrors
-	    }'
-	)
 	echo "$json" > /etc/docker/daemon.json
 	manager::systemctl start docker
 	if [ -f "/usr/bin/docker-compose" ];then
