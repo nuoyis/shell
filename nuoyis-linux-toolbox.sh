@@ -859,6 +859,7 @@ install::docker(){
 			echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.cernet.edu.cn/docker-ce/linux/${system_name,,} $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
 		else
 			curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.gpg
+			echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${system_name,,} $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
 		fi
 		chmod a+r /etc/apt/keyrings/docker.gpg
 		manager::repositories update
@@ -1635,7 +1636,7 @@ update::version(){
 	fi
 }
 
-install(){
+toolbox::install(){
 	echo "检查脚本是否存在/usr/bin/nuoyis-toolbox中"
 	if [ ! -f /usr/bin/nuoyis-toolbox ]; then
 		echo "脚本不存在存在于环境变量，正在下载并创建到/usr/bin/nuoyis-toolbox"
@@ -1664,7 +1665,7 @@ install(){
 echo "判断服务器位置为:$server_location"
 
 #### 执行函数区域 ####
-[[ $options_install -eq 1 ]] && install
+[[ $options_install -eq 1 ]] && toolbox::install
 [[ $options_yum -eq 1 ]] && conf::reposource
 [[ $options_swap -eq 1 ]] && manager::swap
 [[ $installlock -eq 0 ]] && install::main && touch /root/.toolbox-install-init.lock
