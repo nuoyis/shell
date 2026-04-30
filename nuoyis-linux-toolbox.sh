@@ -31,23 +31,23 @@ options_bt=0
 # ---------- 菜单集合 ----------
 show::help(){
 	IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
-  --install            install nuoyis toolbox and autoupdate
-  --remove             remove nuoyis toolbox and autoupdate
-  -ln, --lnmp          install nuoyis version lnmp. Options: gcc docker yum
-  -do, --dockerinstall install docker
-  -doa, --dockerapp    install docker app (qinglong and openlist ...)
-  -na, --nas           install vsftpd nginx and nfs
-  -oll, --ollama       install ollama
-  -bt, --btpanel       install bt panel
-  -ku, --kernelupdate  install use elrepo to update kernel
-  -n, --name           config yum name and folder name
-  -host,--hostname     config default is options_toolbox_init,so you have use this options before install
-  -r,  --mirror        config yum mirrors update,if you not used, it will not be executed. Options: edu aliyun original other
-  -tu, --tuning	       config linux system tuning
-  -sw, --swap          config Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
-  -mp, --mariadbpassword config lnmp-mariadb password set  
-  -h,  --help          show shell help
-  -sha, --sha256sum    show shell's sha256sum
+  -install            install nuoyis toolbox and autoupdate
+  -remove             remove nuoyis toolbox and autoupdate
+  -ln, -lnmp          install nuoyis version lnmp. Options: gcc docker yum
+  -do, -dockerinstall install docker
+  -doa, -dockerapp    install docker app (qinglong and openlist ...)
+  -na, -nas           install vsftpd nginx and nfs
+  -oll, -ollama       install ollama
+  -bt, -btpanel       install bt panel
+  -ku, -kernelupdate  install use elrepo to update kernel
+  -n, -name           config yum name and folder name
+  -host,-hostname     config default is options_toolbox_init,so you have use this options before install
+  -r,  -mirror        config yum mirrors update,if you not used, it will not be executed. Options: edu aliyun original other
+  -tu, -tuning	       config linux system tuning
+  -sw, -swap          config Swap allocation, when your memory is less than 1G, it is forced to be allocated, when it is greater than 1G, it can be allocated by yourself
+  -mp, -mariadbpassword config lnmp-mariadb password set  
+  -h,  -help          show shell help
+  -sha, -sha256sum    show shell's sha256sum
   exam1:           nuoyis-toolbox -initname nuoyis -host nuoyis-shanghai-1 -r aliyun -ln docker -tu -mp 123456 -na
   exam2(overseas): nuoyis-toolbox -initname nuoyis -host nuoyis-us-1 -r original -ln docker -tu -mp 123456 -na
   exam3(btpanel):  nuoyis-toolbox -initname nuoyis -host nuoyis-us-1 -r aliyun -bt
@@ -344,8 +344,10 @@ if command -v yum >/dev/null 2>&1 && [ -d /etc/yum.repos.d ]; then
 			gpgcheck=1
         	gpgkey="https://${mirror_url}/${osname}/RPM-GPG-KEY-${system_name}-\$releasever"
         	repos=(
+				"baseos BaseOS/\$basearch/os/"
         	    "baseos-debug BaseOS/\$basearch/debug/tree/"
         	    "baseos-source BaseOS/source/tree/"
+				"appstream AppStream/\$basearch/os/"
         	    "appstream-debug AppStream/\$basearch/debug/tree/"
         	    "appstream-source AppStream/source/tree/"
         	    "crb CRB/\$basearch/os/"
@@ -1207,7 +1209,7 @@ conf::reposource::deb(){
 deb https://${mirror_url}/debian/ $(lsb_release -sc) main contrib non-free non-free-firmware
 deb https://${mirror_url}/debian/ $(lsb_release -sc)-updates main contrib non-free non-free-firmware
 deb https://${mirror_url}/debian/ $(lsb_release -sc)-backports main contrib non-free non-free-firmware
-deb https://security.debian.org/debian-security $(lsb_release -sc)-security main contrib non-free non-free-firmware
+deb https://${mirror_url}/debian-security $(lsb_release -sc)-security main contrib non-free non-free-firmware
 EOF
        	wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
 		manager::repositories install apt-transport-https
@@ -1217,7 +1219,7 @@ EOF
 deb https://${mirror_url}/ubuntu/ $(lsb_release -sc) main restricted universe multiverse
 deb https://${mirror_url}/ubuntu/ $(lsb_release -sc)-updates main restricted universe multiverse
 deb https://${mirror_url}/ubuntu/ $(lsb_release -sc)-backports main restricted universe multiverse
-deb http://security.ubuntu.com/ubuntu/ $(lsb_release -sc)-security main restricted universe multiverse
+deb https://${mirror_url}/ubuntu/ $(lsb_release -sc)-security main restricted universe multiverse
 EOF
       	yes | add-apt-repository ppa:ondrej/php
 	fi
