@@ -76,7 +76,6 @@ while [[ $# -gt 0 ]]; do
 			rm -rf /usr/bin/nuoyis-toolbox
 			crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab -
 			exit 0
-			shift
 			;;
         -n|-name|-initname)
             prefix=$2
@@ -137,7 +136,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
 		-xyl|-xuanyuanlogin)
-			options_docker_xuanyuanpro_username=$3
+			options_docker_xuanyuanpro_username=$2
 			options_docker_xuanyuanpro_password=$3
 			shift 3
 			;;
@@ -175,14 +174,12 @@ while [[ $# -gt 0 ]]; do
 			nuoyis_install_mirrors=$2
 			update::version
 			exit 0
-			shift
 			;;
 		-sha|-sha256sum)
 			show::version
 			echo "shell latest version sha256sum: $REMOTE_HASH"
 			echo "shell local version sha256sum: $LOCAL_HASH"
 			exit 0
-			shift
 			;;
         -h|-help)
             show::help
@@ -377,7 +374,7 @@ elif command -v apt-get >/dev/null 2>&1 && command -v dpkg >/dev/null 2>&1; then
 
 fi
 # 时间同步配置文件位置判断
-if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
 	chronyconf=/etc/chrony.conf
 else
 	chronyconf=/etc/chrony/chrony.conf
@@ -411,7 +408,7 @@ exit::backoff() {
             ;;
     esac
 	echo "正在清理残余文件并退出脚本"
-	rm -rf /nuoyis-install
+	rm -rf /server/install
 	rm -rf /root/.toolbox-install-init.lock
 	exit 1
 }
@@ -501,7 +498,7 @@ manager::repositories(){
 			;;
 		"update")
 			# 更新所有软件包
-			if [ $PM = "apt" ]; then
+			if [ "$PM" = "apt" ]; then
 				yes | $PM update -y
 			fi
 			yes | $PM upgrade -y
@@ -516,13 +513,13 @@ manager::repositories(){
 			;;
 		"installfull")
 			# 在Yum中使用特定选项安装软件包
-			if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
+			if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ]; then
 				yes | $PM $2 install ${@:3} -y
 			fi
 			;;
 		"updatefull")
 			# 在Yum中使用特定选项更新软件包
-			if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
+			if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ]; then
 				yes | $PM $2 update ${@:3} -y
 			fi
 			;;		
@@ -532,7 +529,7 @@ manager::repositories(){
 			;;
 		"repoadd")
 			# repo添加
-			if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
+			if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ]; then
 				if [ $system_version -lt 8 ];then
 					$PM-config-manager --add-repo $2
 				else
@@ -646,21 +643,19 @@ EOF
 }
 
 install::nas(){
+	manager::repositories install vsftpd samba
     sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
     useradd nas
     mkdir -p /${prefixpath}server/sharefile
-    # chown -R nas:nas /${prefixpath}server/sharefile
     chown root:nas /${prefixpath}server/sharefile
     chmod -R 775 /${prefixpath}server/sharefile
     chmod g+s /${prefixpath}server/sharefile
 	sed -i '/root/d' /etc/vsftpd/user_list
-	sed -i '/root/d' /etc/vsftpd//ftpusers
-    # 额外配置
-    manager::repositories install vsftpd samba
+	sed -i '/root/d' /etc/vsftpd/ftpusers
 
-	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
-    	firewall-cmd --per --add-service=samba
-    	firewall-cmd --per --add-service=ftp
+	if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
+    	firewall-cmd --permanent --add-service=samba
+    	firewall-cmd --permanent --add-service=ftp
     	firewall-cmd --reload
 	else
 		ufw allow samba
@@ -828,7 +823,7 @@ EOF
 	fi
 fi
 
-if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
 	manager::systemctl start vsftpd smb nmb
 else
 	manager::systemctl start vsftpd smbd nmbd
@@ -842,7 +837,7 @@ sleep 10
 install::docker(){
 	echo "安装Docker"
 	mkdir -p /${prefixpath}server/docker-yaml/
-	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+	if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
 		manager::repositories install yum-utils device-mapper-persistent-data lvm2
 		if [[ "$server_location" == "cn" ]];then
 			manager::repositories repoadd https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
@@ -922,7 +917,7 @@ install::ollama(){
 
 install::lnmp::quick(){
 	# 快速安装
-	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+	if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
 		yes | dnf module reset php
 		yes | dnf module install php:remi-8.4 -y
 		manager::repositories install nginx* php php-cli php-fpm php-mysqlnd php-zip php-devel php-gd php-mbstring php-curl php-xml php-pear php-bcmath php-json php-redis mariadb-server
@@ -944,12 +939,12 @@ EOF
 install::lnmp::gcc(){
 	# 编译安装
 	echo "安装必要依赖项"
-	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+	if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
 		manager::repositories install autoconf bison re2c make procps-ng gcc gcc-c++ iputils pkgconfig pcre pcre-devel zlib-devel openssl openssl-devel libxslt-devel libpng-devel libjpeg-devel freetype-devel libxml2-devel sqlite-devel bzip2-devel libcurl-devel libXpm-devel libzip-devel oniguruma-devel gd-devel geoip-devel
 	else
 		manager::repositories install autoconf bison re2c make procps gcc g++ iputils-ping pkg-config libpcre3 libpcre3-dev zlib1g-dev openssl libssl-dev libxslt1-dev libpng-dev libjpeg-dev libfreetype6-dev libxml2-dev libsqlite3-dev libbz2-dev libcurl4-openssl-dev libxpm-dev libzip-dev libonig-dev libgd-dev libgeoip-dev
 	fi
-	cd /nuoyis-install
+	cd /server/install
 	manager::nuoyis::download scriptresources/download/nginx/nginx-1.29.1.tar.gz
 	manager::nuoyis::download scriptresources/download/php/php-8.4.20.tar.gz
 	tar -xzvf nginx-1.29.1.tar.gz
@@ -1083,6 +1078,8 @@ install::lnmp::docker(){
 	touch /${prefixpath}server/docker-yaml/docker-lnmp.yaml
 	touch /${prefixpath}server/web/mariadb/config/my.cnf
 	manager::nuoyis::download scriptresources/config/docker-compose/docker-lnmp.yaml.txt /${prefixpath}server/docker-yaml/docker-lnmp.yaml
+	sed -i -e "s#\$options_mariadb_value#${options_mariadb_value}#g" \
+	       -e "s#\/server#${prefixpath}server#g" /${prefixpath}server/docker-yaml/docker-lnmp.yaml
 	cat > /${prefixpath}server/web/mariadb/config/my.cnf << EOF
 [mysqld]
 server-id=1
@@ -1098,14 +1095,14 @@ EOF
 install::lnmp(){
 	echo "安装lnmp"
 	sleep 30
-	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+	if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
 		aboutserver=`systemctl is-active firewalld`
 		if [ $aboutserver == "inactive" ];then
 			manager::systemctl start firewalld
 		fi
 		firewall-cmd --set-default-zone=public
-		firewall-cmd --zone=public --add-service=http --per
-		firewall-cmd --zone=public --add-port=3306/tcp --per
+		firewall-cmd --zone=public --add-service=http --permanent
+		firewall-cmd --zone=public --add-port=3306/tcp --permanent
 		firewall-cmd --reload
 	else
 		ufw enable
@@ -1266,7 +1263,7 @@ conf::reposource::redhat(){
 }
 
 conf::reposource(){
-	if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
+	if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ]; then
 		# 判断源站
 		if [ "$options_yum_install" == "other" ]; then
 			manager::download https://linuxmirrors.cn/main.sh
@@ -1335,13 +1332,13 @@ conf::reposource(){
 				;;
 			esac			
 		fi
-	elif [ $PM = "apt" ];then
+	elif [ "$PM" = "apt" ];then
 			conf::reposource::deb
 	fi
 	
 	if [[ $installlock -eq 0 ]]; then
 		echo "正在安装时间同步软件，以及检查时间并同步，防止yum报错"
-		if [ $PM = "yum" ] || [ $PM = "dnf" ]; then
+		if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ]; then
 	    	yum --setopt=sslverify=0 -y install chrony cronie
 		else
 	    	apt-get -o Acquire::Check-Valid-Until=false -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false update -y
@@ -1362,7 +1359,7 @@ driftfile /var/lib/chrony/chrony.drift
 makestep 1.0 3
 EOF
 	if [[ $installlock -eq 0 ]]; then
-		if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+		if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
 			systemctl enable --now chronyd 2>/dev/null
 			systemctl restart chronyd 2>/dev/null
 			crontab -l 2>/dev/null | sed '/chronyd/d' | crontab -
@@ -1378,14 +1375,14 @@ EOF
 		sleep 10
 	fi
 	# 配置附加源(重新配置)
-	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+	if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
 		conf::reposource::yum_additional_source
 	fi
 
 	if [[ $mirror_update -eq 1 ]];then
 		echo "正在更新源"
 		rm -rf /etc/yum.repods.d/*.rpmsave
-		if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+		if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
 			manager::repositories clean
 			manager::repositories makecache
 		fi
@@ -1395,7 +1392,7 @@ EOF
 
 install::kernel(){
 echo "内核更最新"
-if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
 	if [ $system_version -gt 8 ];then
 		manager::repositories installfull --disablerepo=\* --enablerepo=elrepo-kernel kernel-ml.x86_64
 		manager::repositories remove kernel-tools-libs.x86_64 kernel-tools.x86_64
@@ -1540,14 +1537,14 @@ install::main(){
 		hostnamectl set-hostname ${prefix}init-shell
 	fi
 
-	echo "创建临时服务部署文件夹nuoyis-install"
-	mkdir -p /nuoyis-install
+	echo "创建临时服务部署文件夹server/install"
+	mkdir -p /server/install
 
 	echo "创建${prefix}服务核心文件夹"
 	mkdir -p /${prefixpath}server/{logs,shell}
 
 	echo "安装核心软件包"
-	if [ $PM = "yum" ] || [ $PM = "dnf" ];then
+	if [ "$PM" = "yum" ] || [ "$PM" = "dnf" ];then
 		manager::repositories install jq sshpass dnf-plugins-core python3 python3-pip bash-completion vim git wget net-tools tuned dos2unix gcc gcc-c++ make unzip perl perl-IPC-Cmd perl-Test-Simple pciutils tar chrony
 	else
 		export DEBIAN_FRONTEND=noninteractive
@@ -1681,4 +1678,4 @@ echo "判断服务器位置为:$server_location"
 [[ $options_nas -eq 1 ]] && install::nas
 
 # 销毁脚本安装时创建目录
-rm -rf /nuoyis-install
+rm -rf /server/install
