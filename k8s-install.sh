@@ -586,7 +586,7 @@ else
                 is_first_master=true
                 # 新改并行安装方法
                 if [ ! -f /usr/bibn/nuoyis-toolbox ]; then
-                    bash <(curl -sSLk https://shell.nuoyis.net/nuoyis-linux-toolbox.sh) --install 1 > /dev/null 2>&1
+                    bash <(curl -sSLk https://shell.nuoyis.net/nuoyis-linux-toolbox.sh) -install 1 > /dev/null 2>&1
                     nuoyis-toolbox -r aliyun
                 fi
                 yum install sshpass -y
