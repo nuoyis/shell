@@ -28,6 +28,17 @@ options_docker_app=0
 options_nas=0
 options_ollama=0
 options_bt=0
+options_k8s=0
+options_k8s_version=""
+options_k8s_master=""
+options_k8s_node=""
+options_k8s_keepalived=""
+options_k8s_mask=""
+options_k8s_password=""
+options_k8s_device=""
+options_k3s=0
+options_k8s_mastersip=()
+options_k8s_nodesip=()
 # ---------- 菜单集合 ----------
 show::help(){
 	IFS=$'\n' read -r -d '' -a help_lines <<'EOF'
@@ -39,6 +50,15 @@ show::help(){
   -na, -nas           install vsftpd nginx and nfs
   -oll, -ollama       install ollama
   -bt, -btpanel       install bt panel
+  -k8s, -kubernetes   install kubernetes cluster (require sub options below)
+  --kv,-k8sversion    set k8s version (default latest)
+  --km,-k8smaster     set k8s master ip list (comma separated)
+  --kn,-k8snode       set k8s node ip list (comma separated)
+  --kk,-k8skeepalived set k8s keepalived vip:port
+  --ksk,-k8smask      set k8s subnet mask
+  --kp,-k8spassword   set k8s ssh password
+  --kd,-k8sdevice     set k8s device type (master/node)
+  -k3s                install k3s light kubernetes
   -ku, -kernelupdate  install use elrepo to update kernel
   -n, -name           config yum name and folder name
   -host,-hostname     config default is options_toolbox_init,so you have use this options before install
@@ -51,6 +71,9 @@ show::help(){
   exam1:           nuoyis-toolbox -initname nuoyis -host nuoyis-shanghai-1 -r aliyun -ln docker -tu -mp 123456 -na
   exam2(overseas): nuoyis-toolbox -initname nuoyis -host nuoyis-us-1 -r original -ln docker -tu -mp 123456 -na
   exam3(btpanel):  nuoyis-toolbox -initname nuoyis -host nuoyis-us-1 -r aliyun -bt
+  exam4(k8s multi): nuoyis-toolbox -r aliyun -do -k8s --km 192.168.20.35,192.168.20.36,192.168.20.37 --kn 192.168.20.38 --kk 192.168.20.40:16443 --ksk 24 --kp 1 --kd master --kv 1.32.2
+  exam5(k8s single):nuoyis-toolbox -r aliyun -do -k8s --km 192.168.20.36 --kn 192.168.20.37 --kp 1 --kd master --kv 1.23.1
+  exam6(k3s light): nuoyis-toolbox -k3s
 EOF
 
 echo "welcome to use nuoyis's toolbox"
@@ -184,6 +207,46 @@ while [[ $# -gt 0 ]]; do
         -h|-help)
             show::help
             ;;
+		-k8s|-kubernetes)
+			options_k3s=0
+			options_k8s=1
+			shift
+			;;
+		--kv|-k8sversion)
+			options_k8s_version=$2
+			shift 2
+			;;
+		--km|-k8smaster)
+			options_k8s_master=$2
+			IFS=',' read -ra options_k8s_mastersip <<< "$2"
+			shift 2
+			;;
+		--kn|-k8snode)
+			options_k8s_node=$2
+			IFS=',' read -ra options_k8s_nodesip <<< "$2"
+			shift 2
+			;;
+		--kk|-k8skeepalived)
+			options_k8s_keepalived=$2
+			shift 2
+			;;
+		--ksk|-k8smask)
+			options_k8s_mask=$2
+			shift 2
+			;;
+		--kp|-k8spassword)
+			options_k8s_password=$2
+			shift 2
+			;;
+		--kd|-k8sdevice)
+			options_k8s_device=$2
+			shift 2
+			;;
+		-k3s)
+			options_k8s=0
+			options_k3s=1
+			shift
+			;;
         -*)
             echo "unknown command: $1"
             show::help
@@ -1653,11 +1716,534 @@ toolbox::install(){
 		chmod +x /usr/bin/nuoyis-toolbox
 		echo "开启crontab 自动更新检测，如果介意请使用 crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab - 删除该行"
 		crontab -l 2>/dev/null | sed '/nuoyis-toolbox/d' | crontab -
-		(crontab -l 2>/dev/null; echo "0 * * * * /usr/bin/nuoyis-toolbox --update $nuoyis_install_mirrors;") | crontab -
+		(crontab -l 2>/dev/null; echo "0 * * * * /usr/bin/nuoyis-toolbox -update $nuoyis_install_mirrors;") | crontab -
 	else
 		echo "已通过各种方式部署于环境变量中，无需重复安装"
 	fi
 	exit 0
+}
+
+# ---------- k8s 函数区域 ----------
+k8s_MIN_KERNEL_VERSION="4.15"
+k8s::compare_versions() {
+    local ver1=$(echo "$1" | sed 's/^v//' | cut -d'-' -f1 | cut -d'+' -f1)
+    local ver2=$(echo "$2" | sed 's/^v//' | cut -d'-' -f1 | cut -d'+' -f1)
+    local version1=$(echo "$ver1" | awk -F. '{printf("%03d%03d%03d\n", $1, $2, $3)}')
+    local version2=$(echo "$ver2" | awk -F. '{printf("%03d%03d%03d\n", $1, $2, $3)}')
+    if [ "$version1" -lt "$version2" ]; then echo -1
+    elif [ "$version1" -gt "$version2" ]; then echo 1
+    else echo 0; fi
+}
+
+k8s::version_check() {
+    local input="$1"
+    input="${input#v}"; input="${input#V}"
+    input="${input%%-*}"; input="${input%%+*}"
+    local major minor
+    IFS='.' read -r major minor _ <<< "$input"
+    [[ -z "$minor" ]] && minor=0
+    major=$(echo "$major" | sed 's/[^0-9].*//')
+    minor=$(echo "$minor" | sed 's/[^0-9].*//')
+    [[ -z "$major" ]] && major=0
+    [[ -z "$minor" ]] && minor=0
+    local ref_major=1 ref_minor=24
+    if (( major > ref_major )) || (( major == ref_major && minor >= ref_minor )); then echo "1"
+    else echo "0"; fi
+}
+
+k8s::install_kubernetes(){
+    touch /etc/yum.repos.d/toolbox-kubernetes.repo
+    if [ $(k8s::version_check $options_k8s_version) -eq 0 ]; then
+        cat > /etc/yum.repos.d/toolbox-kubernetes.repo << 'EOF'
+[kubernetes]
+name=Kubernetes
+baseurl=https://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64/
+enabled=1
+gpgcheck=0
+EOF
+    else
+        cat > /etc/yum.repos.d/toolbox-kubernetes.repo << EOF
+[kubernetes]
+name=Kubernetes
+baseurl=https://mirrors.aliyun.com/kubernetes-new/core/stable/v$(echo "$options_k8s_version" | cut -d'.' -f1,2)/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/kubernetes-new/core/stable/v$(echo "$options_k8s_version" | cut -d'.' -f1,2)/rpm/repodata/repomd.xml.key
+EOF
+    fi
+    systemctl enable --now docker
+    systemctl enable --now containerd
+    cat > /etc/docker/daemon.json << EOF
+{
+  "registry-mirrors": [
+    "https://docker.xuanyuan.me",
+    "https://docker.m.daocloud.io",
+    "https://docker66ccff.lovablewyh.eu.org"
+  ],
+  "bip": "192.168.100.1/24",
+  "exec-opts": ["native.cgroupdriver=systemd"]
+}
+EOF
+    containerd config default > /etc/containerd/config.toml
+    sed -i -e "s|registry.k8s.io/pause|registry.aliyuncs.com/google_containers/pause|g" \
+           -e "s|SystemdCgroup = false|SystemdCgroup = true|g" /etc/containerd/config.toml
+    systemctl daemon-reload
+    systemctl restart docker
+    systemctl restart containerd
+    yum install -y kubelet-$options_k8s_version kubeadm-$options_k8s_version kubectl-$options_k8s_version
+    systemctl enable --now kubelet
+    cat >/etc/crictl.yaml <<EOF
+runtime-endpoint: unix:///run/containerd/containerd.sock
+image-endpoint: unix:///run/containerd/containerd.sock
+timeout: 10
+debug: false
+EOF
+}
+
+k8s::install_kernel(){
+    wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
+    wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-headers-5.4.226-1.el7.elrepo.x86_64.rpm
+    wget https://openlist.nuoyis.net/d/blog/kubernetes/kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
+    rpm -ivh kernel-lt-devel-5.4.226-1.el7.elrepo.x86_64.rpm
+    rpm -ivh kernel-lt-5.4.226-1.el7.elrepo.x86_64.rpm
+    yum remove kernel-headers -y
+    rpm -ivh kernel-lt-headers-5.4.226-1.el7.elrepo.x86_64.rpm
+    grub2-set-default 0
+    grub2-mkconfig -o /boot/grub2/grub.cfg
+    reboot
+}
+
+k8s::join(){
+    if [ $options_k8s_device == "master" ];then
+        if ! $k8s_is_first_master; then
+            source /kubernetes-master-join.sh
+        fi
+        rm -rf $HOME/.kube
+        mkdir -p $HOME/.kube
+        cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+        chown $(id -u):$(id -g) $HOME/.kube/config
+        sed -i '/KUBECONFIG/d' /etc/bashrc
+        export KUBECONFIG=/etc/kubernetes/admin.conf
+        echo "KUBECONFIG=/etc/kubernetes/admin.conf" >> /etc/bashrc
+        if $k8s_is_first_master; then
+            if [ "${#options_k8s_mastersip[@]}" -gt 1 ]; then
+                systemctl enable --now nginx
+            fi
+        fi
+    else
+        source /kubernetes-node-join.sh
+    fi
+}
+
+k8s::docker_init(){
+    kubeadm init --kubernetes-version=$options_k8s_version --apiserver-advertise-address=${options_k8s_mastersip[0]} --image-repository registry.aliyuncs.com/google_containers --pod-network-cidr=10.223.0.0/16 --ignore-preflight-errors=SystemVerification --ignore-preflight-errors=Mem
+}
+
+k8s::containerd_init(){
+    if [ $(uname -m) != "x86_64" ];then
+        touch /toolbox-pi-containerkill.sh
+        cat > /toolbox-pi-containerkill.sh << "EOF"
+mkdir -p /etc/systemd/system/kubelet.service.d/
+cat > /etc/systemd/system/kubelet.service.d/nuoyis-init.conf << 'pi_EOF'
+[Unit]
+After=containerd.service
+Requires=containerd.service
+
+[Service]
+ExecStartPre=/bin/bash -c '/usr/bin/crictl rm -f $(crictl ps -a -q)'
+ExecStartPre=rm -rf /run/containerd/io.containerd.runtime.v2.task/k8s.io/*
+ExecStartPre=rm -rf /run/containerd/io.containerd.metadata.v1.bolt/meta.db
+pi_EOF
+EOF
+    fi
+    kubeadm config print init-defaults > kubeadm.yaml
+    sed -i -e "s|  criSocket: unix:///var/run/containerd/containerd.sock|  criSocket: unix:///run/containerd/containerd.sock|g" \
+           -e "s|imageRepository: registry.k8s.io|imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers|g" \
+           -e "/serviceSubnet: 10.96.0.0\\/12/i \\  podSubnet: 10.223.0.0/16" kubeadm.yaml
+    if [ "${#options_k8s_mastersip[@]}" -eq 1 ]; then
+        sed -i -e "s|  advertiseAddress: 1.2.3.4|  advertiseAddress: ${options_k8s_mastersip[0]}|g" \
+               -e "s|  name: node|  name: kubernetes-master1|g" kubeadm.yaml
+    else
+        sed -i -e "\|^localAPIEndpoint:|,\|^  bindPort:|s|^|# |" \
+               -e "\|^[[:space:]]*name: node|s|^|# |" \
+               -e "s|imageRepository: registry.k8s.io|imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers|g" \
+               -e "\|^kubernetesVersion:|a\controlPlaneEndpoint: $k8s_keepalived" kubeadm.yaml
+        cat > /etc/nginx/nginx.conf << EOF
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+include /usr/share/nginx/modules/*.conf;
+events {
+    worker_connections 1024;
+}
+stream {
+    log_format  main  '\$remote_addr \$upstream_addr - [\$time_local] \$status \$upstream_bytes_sent';
+    access_log  /var/log/nginx/k8s-access.log  main;
+    upstream k8s-apiserver {
+EOF
+        for ip in "${options_k8s_mastersip[@]}"; do
+            echo "    server $ip:6443 weight=5 max_fails=3 fail_timeout=30s;" >> /etc/nginx/nginx.conf
+        done
+        cat >> /etc/nginx/nginx.conf << EOF
+    }
+    server {
+       listen $(echo $k8s_keepalived | cut -d':' -f2- | xargs);
+       proxy_pass k8s-apiserver;
+    }
+}
+http {
+    log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+                       '\$status \$body_bytes_sent "\$http_referer" '
+                       '"\$http_user_agent" "\$http_x_forwarded_for"';
+    access_log  /var/log/nginx/access.log  main;
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 2048;
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+    server {
+        listen       80 default_server;
+        server_name  _;
+        location / {
+        }
+    }
+}
+EOF
+        systemctl enable --now nginx
+        cat > /etc/keepalived/keepalived.conf << EOF
+global_defs {
+   notification_email {
+     acassen@firewall.loc
+     failover@firewall.loc
+     sysadmin@firewall.loc
+   }
+   notification_email_from Alexandre.Cassen@firewall.loc
+   smtp_server 127.0.0.1
+   smtp_connect_timeout 30
+   router_id NGINX_MASTER
+}
+vrrp_instance VI_1 {
+    state MASTER
+    interface $k8s_networkname
+    virtual_router_id 1
+    priority 100
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass k8svip
+    }
+    virtual_ipaddress {
+        $(echo $k8s_keepalived | cut -d':' -f1 | xargs)/$options_k8s_mask
+    }
+}
+EOF
+        systemctl enable --now keepalived
+    fi
+    cat >> kubeadm.yaml << 'EOF'
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+mode: ipvs
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+EOF
+    kubeadm init --config=kubeadm.yaml --ignore-preflight-errors=SystemVerification --ignore-preflight-errors=Mem
+    for masterip in "${options_k8s_mastersip[@]:1}"; do
+        sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$masterip "mkdir -p /etc/kubernetes/pki/etcd && mkdir -p /root/.kube/"
+        sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no /etc/kubernetes/pki/ca.crt root@$masterip:/etc/kubernetes/pki/
+        sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no /etc/kubernetes/pki/ca.key root@$masterip:/etc/kubernetes/pki/
+        sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no /etc/kubernetes/pki/sa.key root@$masterip:/etc/kubernetes/pki/
+        sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no /etc/kubernetes/pki/sa.pub root@$masterip:/etc/kubernetes/pki/
+        sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no /etc/kubernetes/pki/front-proxy-ca.crt root@$masterip:/etc/kubernetes/pki/
+        sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no /etc/kubernetes/pki/front-proxy-ca.key root@$masterip:/etc/kubernetes/pki/
+        sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no /etc/kubernetes/pki/etcd/ca.crt root@$masterip:/etc/kubernetes/pki/etcd/
+        sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no /etc/kubernetes/pki/etcd/ca.key root@$masterip:/etc/kubernetes/pki/etcd/
+    done
+}
+
+k8s::config(){
+    if [[ "$options_k8s_device" == "master" && "$k8s_is_first_master" == true ]]; then
+        kubeadm reset -f
+        if [ $(k8s::version_check $options_k8s_version) -eq 0 ]; then
+            k8s::docker_init
+        else
+            k8s::containerd_init
+        fi
+        k8s::join
+        sleep 5
+        KUBE_MINOR=$(echo "$options_k8s_version" | awk -F. '{print $2}')
+        if [ "$KUBE_MINOR" -lt 21 ]; then
+            echo "($options_k8s_version<1.21)，install calico v3.19"
+            wget -O calico.yaml "https://docs.projectcalico.org/archive/v3.19/manifests/calico.yaml"
+            sed -i 's#docker.io/##g' calico.yaml
+        else
+            if [ $KUBE_MINOR -lt 31 ]; then
+                echo "(1.31>=$options_k8s_version>=1.21)，install calico v3.24"
+                calicoversion="https://docs.projectcalico.org/archive/v3.24/manifests/calico.yaml"
+            else
+                echo "($options_k8s_version>=1.31)，install calico latest"
+                calicoversion="https://ghfast.top/https://raw.githubusercontent.com/projectcalico/calico/master/manifests/calico.yaml"
+            fi
+            wget -O calico.yaml $calicoversion
+            sed -i -e '/# - name: CALICO_IPV4POOL_CIDR/{
+N
+N
+c\
+            - name: CALICO_IPV4POOL_CIDR\
+              value: "10.223.0.0/12"\
+            - name: IP_AUTODETECTION_METHOD\
+              value: "interface='"$k8s_networkname"'"
+}' \
+               -e 's|docker.io|docker.m.daocloud.io|g' \
+               -e 's|quay.io|quay.dockerproxy.net|g' calico.yaml
+        fi
+        kubectl apply -f calico.yaml
+        if [[ -n "${options_k8s_nodesip[*]}" ]]; then
+            k8s::otherserver
+        fi
+    else
+        k8s::join
+    fi
+    sed -i '/kubectl completion bash/d' /etc/bashrc
+    echo "source <(kubectl completion bash)" >> /etc/bashrc
+    bash /etc/bashrc
+}
+
+k8s::otherserver(){
+    join_cmd=$(kubeadm token create --print-join-command | grep "kubeadm")
+    echo "$join_cmd" > kubernetes-node-join.sh
+    echo "$join_cmd --control-plane --ignore-preflight-errors=SystemVerification" > kubernetes-master-join.sh
+    all_ips=("${options_k8s_mastersip[@]:1}" "${options_k8s_nodesip[@]}")
+    nodenumber=1
+    vipid=90
+    for nodeip in "${all_ips[@]}"; do
+        is_master=false
+        for m_ip in "${options_k8s_mastersip[@]}"; do
+            if [[ "$nodeip" == "$m_ip" ]]; then is_master=true; break; fi
+        done
+        device_type=$($is_master && echo master || echo node)
+        # scp join 脚本到远端
+        if $is_master; then
+            sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no kubernetes-master-join.sh root@$nodeip:/kubernetes-master-join.sh
+        else
+            sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no kubernetes-node-join.sh root@$nodeip:/kubernetes-node-join.sh
+        fi
+        kernel_version=$(sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no "root@$nodeip" "uname -r | cut -d- -f1")
+        echo "current node $nodenumber IP: $nodeip kernel: $kernel_version"
+        if [ $(k8s::version_check $options_k8s_version) -eq 1 ]; then
+            if printf "%s\n%s\n" "$k8s_MIN_KERNEL_VERSION" "$kernel_version" | sort -V -C; then
+                echo "kernel ok"
+            else
+                echo "kernel too old, upgrading and reboot"
+            fi
+        fi
+        # 远端已安装 toolbox，直接用 k8s 参数调用
+        sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$nodeip "nuoyis-toolbox -k8s --km $options_k8s_master --kn $options_k8s_node --kp $options_k8s_password --kd $device_type --kv $options_k8s_version"
+        if $is_master; then
+            sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no /etc/nginx/nginx.conf root@$nodeip:/etc/nginx/nginx.conf
+            sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$nodeip "cat > /etc/keepalived/keepalived.conf << EOF
+global_defs {
+   notification_email {
+     acassen@firewall.loc
+     failover@firewall.loc
+     sysadmin@firewall.loc
+   }
+   notification_email_from Alexandre.Cassen@firewall.loc
+   smtp_server 127.0.0.1
+   smtp_connect_timeout 30
+   router_id NGINX_MASTER
+}
+vrrp_instance VI_1 {
+    state BACKUP
+    interface $k8s_networkname
+    virtual_router_id 1
+    priority $vipid
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass k8svip
+    }
+    virtual_ipaddress {
+        $(echo $k8s_keepalived | cut -d':' -f1 | xargs)/$options_k8s_mask
+    }
+}
+EOF"
+            sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$nodeip "systemctl enable --now keepalived"
+            vipid=$(($vipid-10))
+        fi
+        if [ $(k8s::version_check $options_k8s_version) -eq 1 ]; then
+            if ! printf "%s\n%s\n" "$k8s_MIN_KERNEL_VERSION" "$kernel_version" | sort -V -C; then
+                echo "wait $nodeip reboot..."
+                sleep 70
+                while ! ping -c 1 -W 1 "$nodeip" >/dev/null 2>&1; do
+                    echo "wait $nodeip booting..."
+                    sleep 3
+                done
+                echo "re-run install via toolbox"
+                sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$nodeip "nuoyis-toolbox -k8s --km $options_k8s_master --kn $options_k8s_node --kp $options_k8s_password --kd $device_type --kv $options_k8s_version"
+            fi
+        fi
+        nodenumber=$((nodenumber + 1))
+    done
+}
+
+k8s::init(){
+    systemctl disable --now firewalld
+    setenforce 0
+    swapoff -a
+    yum install nginx keepalived nginx-mod-stream yum-utils device-mapper-persistent-data lvm2 wget bash* net-tools nfs-utils lrzsz gcc gcc-c++ make cmake openssl-devel curl curl-devel unzip sudo libaio-devel wget vim autoconf sshpass automake zlib-devel python-devel epel-release openssh-server chrony -y
+    sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+    sed -i '/^\s*server\s\+/d' /etc/chrony.conf
+    sed -i '/kubernetes/d' /etc/hosts
+    sed -i 's/.*swap.*/#&/' /etc/fstab
+    echo "disable swap for k8s"
+    systemctl mask swap.target
+    sed -i '/^net.bridge.bridge-nf-call-ip6tables/d; /^net.bridge.bridge-nf-call-iptables/d; /^net.ipv4.ip_forward/d' /etc/sysctl.conf
+    rm -rf /etc/sysctl.d/kubernetes.conf
+    if [[ -n "${options_k8s_nodesip[*]}" ]]; then
+        if [[ "$options_k8s_device" == "master" && "$k8s_is_first_master" == true ]]; then
+            nodenumber=1
+            for masterip in "${options_k8s_mastersip[@]}"; do
+                sshpass -p $options_k8s_password ssh -o StrictHostKeyChecking=no root@$masterip "hostnamectl set-hostname kubernetes-master$nodenumber"
+                nodenumber=$(($nodenumber+1))
+            done
+            nodenumber=1
+            for nodeip in "${options_k8s_nodesip[@]}"; do
+                sshpass -p $options_k8s_password ssh -o StrictHostKeyChecking=no root@$nodeip "hostnamectl set-hostname kubernetes-node$nodenumber"
+                nodenumber=$(($nodenumber+1))
+            done
+        fi
+        nodenumber=1
+        for nodeip in "${options_k8s_nodesip[@]}"; do
+            cat >> /etc/hosts << EOF
+$nodeip kubernetes-node$nodenumber
+EOF
+            nodenumber=$(($nodenumber+1))
+        done
+    fi
+    nodenumber=1
+    for masterip in "${options_k8s_mastersip[@]}"; do
+        cat >> /etc/hosts << EOF
+$masterip kubernetes-master$nodenumber
+EOF
+        nodenumber=$(($nodenumber+1))
+    done
+    systemctl enable chronyd --now
+    cat >> /etc/chrony.conf << EOF
+server ntp1.aliyun.com iburst
+server ntp2.aliyun.com iburst
+server ntp1.tencent.com iburst
+server ntp2.tencent.com iburst
+EOF
+    systemctl restart chronyd
+    sed -i '/^00 0 * * * root systemctl restart chronyd iburst/d' /etc/chrony.conf
+    cat >> /etc/crontab.conf << EOF
+00 0 * * * root systemctl restart chronyd
+EOF
+    modprobe br_netfilter
+    echo "br_netfilter" >> /etc/modules-load.d/modules.conf
+    cat > /etc/sysctl.d/kubernetes.conf << "EOF"
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+    sysctl -p /etc/sysctl.d/kubernetes.conf
+}
+
+k8s::k3s(){
+    if [ $options_yum -eq 0 ]; then
+        options_yum_install="aliyun"; options_yum=1; conf::reposource
+    fi
+    if [ $options_docker -eq 0 ]; then
+        options_docker=1; install::docker
+    fi
+    curl -sfL https://rancher-mirror.rancher.cn/k3s/k3s-install.sh | INSTALL_K3S_MIRROR=cn INSTALL_K3S_EXEC="--docker --disable traefik,metrics-server --service-node-port-range=1-65535 --flannel-ipv6-masq" sh -
+}
+
+k8s::main(){
+    local MIN_VERSION="1.19.0"
+    local MAX_VERSION=$(curl -sk "https://version.nuoyis.net/json/kubernetes.json" 2>/dev/null | grep -o '"versions"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*: *"//;s/"$//')
+    if [ -z "$MAX_VERSION" ]; then MAX_VERSION="1.35.1"; fi
+    if [ -z "$options_k8s_version" ]; then options_k8s_version="$MAX_VERSION"; fi
+    k8s_networkname=$(ip route | grep default | awk '{print $5}')
+    current_kernel=$(uname -r | cut -d- -f1)
+    if [ -z "$options_k8s_keepalived" ]; then
+        k8s_keepalived="$(hostname -I | awk '{print $1}' | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)\..*/\1/').199:16443"
+    else
+        k8s_keepalived="$options_k8s_keepalived"
+    fi
+
+    if [ $(k8s::compare_versions $options_k8s_version $MIN_VERSION) -lt 0 ]; then
+            echo "version ($options_k8s_version) < min ($MIN_VERSION)."; exit 1
+        elif [ $(k8s::compare_versions $options_k8s_version $MAX_VERSION) -gt 0 ]; then
+            echo "version ($options_k8s_version) > max ($MAX_VERSION)."; exit 1
+        else
+            if [ $(k8s::version_check $options_k8s_version) -eq 0 ]; then
+                if [ $system_version -gt "8" ];then
+                    echo "os version 8+ not support docker mode k8s"; exit 1
+                fi
+            fi
+            for ip in $(hostname -I); do
+                if [[ "$ip" == "${options_k8s_mastersip[0]}" ]]; then
+                    k8s_is_first_master=true
+                    # 若用户已指定 -r 参数则跳过默认源配置；否则用 aliyun 默认源
+                    if [ $options_yum -eq 0 ]; then
+                        options_yum_install="aliyun"; options_yum=1; conf::reposource
+                    fi
+                    yum install sshpass -y
+                    echo "parallel installing base software, check log in /var/log/toolbox-kubernetes"
+                    mkdir -p /var/log/toolbox-kubernetes
+                    all_ips=("${options_k8s_mastersip[@]}" "${options_k8s_nodesip[@]}")
+                    pids=()
+                    declare -A pid_host
+                    fail_count=0
+                    for initip in "${all_ips[@]}"; do
+                        {
+                        k8s_toolbox_path="$(realpath "$0")"
+                        sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$initip "rm -rf /usr/bin/nuoyis-toolbox"
+                        sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no "$k8s_toolbox_path" root@$initip:/usr/bin/nuoyis-toolbox
+                        sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$initip "chmod +x /usr/bin/nuoyis-toolbox"
+                        sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$initip "nuoyis-toolbox -r aliyun -do" >> "/var/log/toolbox-kubernetes/${initip}.log" 2>&1
+                        } &
+                        pid=$!
+                        pids+=($pid)
+                        pid_host[$pid]=$initip
+                    done
+                    for pid in "${pids[@]}"; do
+                        wait $pid
+                        if [ $? -ne 0 ]; then
+                            echo "${pid_host[$pid]} install failed"
+                            ((fail_count++))
+                        fi
+                    done
+                    break
+                fi
+            done
+            k8s::init
+            if [ $(k8s::version_check $options_k8s_version) -eq 0 ]; then
+                yum remove -y docker-ce docker-ce-cli docker-ce-rootless-extras docker-buildx-plugin docker-compose-plugin -y
+                yum install docker-ce-19.03.15 docker-ce-cli-19.03.15 -y
+            fi
+            k8s::install_kubernetes
+            if [ $(k8s::version_check $options_k8s_version) -eq 1 ]; then
+                if [ $system_version == "7" ];then
+                    echo "current kernel: $current_kernel, require >= $k8s_MIN_KERNEL_VERSION"
+                    if printf "%s\n%s\n" "$k8s_MIN_KERNEL_VERSION" "$current_kernel" | sort -V -C; then
+                        echo "kernel ok"
+                    else
+                        echo "kernel too old, upgrading and rebooting"
+                        k8s::install_kernel
+                        exit 0
+                    fi
+                fi
+            fi
+            k8s::config
+        fi
 }
 
 
@@ -1676,6 +2262,8 @@ echo "判断服务器位置为:$server_location"
 [[ $options_lnmp -eq 1 ]] && install::lnmp
 [[ $options_ollama -eq 1 ]] && install::ollama
 [[ $options_nas -eq 1 ]] && install::nas
+[[ $options_k3s -eq 1 ]] && k8s::k3s
+[[ $options_k8s -eq 1 ]] && k8s::main
 
 # 销毁脚本安装时创建目录
 rm -rf /server/install
