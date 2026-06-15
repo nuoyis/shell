@@ -2042,6 +2042,16 @@ k8s::otherserver(){
                 echo "kernel too old, upgrading and reboot"
             fi
         fi
+        # 确保远端 toolbox 存在
+        k8s_toolbox_path="$0"
+        case "$k8s_toolbox_path" in
+            /*) ;;
+            *)  k8s_toolbox_path="$PWD/$k8s_toolbox_path" ;;
+        esac
+        sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$nodeip "[ -x /usr/bin/nuoyis-toolbox ]" || {
+            sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no "$k8s_toolbox_path" "root@$nodeip:/usr/bin/nuoyis-toolbox"
+            sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$nodeip "chmod +x /usr/bin/nuoyis-toolbox"
+        }
         # 远端已安装 toolbox，直接用 k8s 参数调用
         sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$nodeip "nuoyis-toolbox -k8s --km $options_k8s_master --kn $options_k8s_node --kp $options_k8s_password --kd $device_type --kv $options_k8s_version"
         if $is_master; then
@@ -2204,11 +2214,17 @@ k8s::main(){
                     fail_count=0
                     for initip in "${all_ips[@]}"; do
                         {
-                        k8s_toolbox_path="$(realpath "$0")"
-                        sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$initip "rm -rf /usr/bin/nuoyis-toolbox"
-                        sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no "$k8s_toolbox_path" root@$initip:/usr/bin/nuoyis-toolbox
-                        sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$initip "chmod +x /usr/bin/nuoyis-toolbox"
-                        sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$initip "nuoyis-toolbox -r aliyun -do" >> "/var/log/toolbox-kubernetes/${initip}.log" 2>&1
+                        k8s_toolbox_path="$0"
+                        case "$k8s_toolbox_path" in
+                            /*) ;;
+                            *)  k8s_toolbox_path="$PWD/$k8s_toolbox_path" ;;
+                        esac
+                        if sshpass -p "$options_k8s_password" scp -o StrictHostKeyChecking=no "$k8s_toolbox_path" "root@$initip:/usr/bin/nuoyis-toolbox" 2>/dev/null; then
+                            sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$initip "chmod +x /usr/bin/nuoyis-toolbox"
+                            sshpass -p "$options_k8s_password" ssh -o StrictHostKeyChecking=no root@$initip "nuoyis-toolbox -r aliyun -do" >> "/var/log/toolbox-kubernetes/${initip}.log" 2>&1
+                        else
+                            echo "scp failed for $initip" >> "/var/log/toolbox-kubernetes/${initip}.log"
+                        fi
                         } &
                         pid=$!
                         pids+=($pid)
