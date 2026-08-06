@@ -624,27 +624,24 @@ if [ -n "$swap_file" ];then
 	echo "虚拟内存已存在"
 else
     memory=`free -m | awk '/^Mem:/ {print $2}'`
-    if [ $memory -lt 1024 ] || [ $options_swap -eq 1 ];then
-        echo "设置虚拟内存"
-        if [ -z $options_swap_value ];then
-            swapsize=$[1024*2];
-        else
-            swapsize=$options_swap_value
-        fi
-        cat > /etc/sysctl.conf << EOF
+    echo "设置虚拟内存"
+    if [ -z $options_swap_value ];then
+        swapsize=$[1024*2];
+    else
+        swapsize=$options_swap_value
+    fi
+    cat > /etc/sysctl.conf << EOF
 $(egrep -v '^vm.swappiness' /etc/sysctl.conf)
 EOF
-        echo "vm.swappiness=60" >> /etc/sysctl.conf
-        dd if=/dev/zero of=/toolbox-swap bs=1M count=$swapsize
-        chmod 0600 /toolbox-swap
-        mkswap -f /toolbox-swap
-        swapon /toolbox-swap
-        echo "/toolbox-swap    swap    swap    defaults    0 0" >> /etc/fstab
-        mount -a
-        sysctl -p
-    fi
+    echo "vm.swappiness=60" >> /etc/sysctl.conf
+    dd if=/dev/zero of=/toolbox-swap bs=1M count=$swapsize
+    chmod 0600 /toolbox-swap
+    mkswap -f /toolbox-swap
+    swapon /toolbox-swap
+    echo "/toolbox-swap    swap    swap    defaults    0 0" >> /etc/fstab
+    mount -a
+    sysctl -p
 fi
-install::main
 }
 
 install::bt(){
@@ -2266,9 +2263,9 @@ k8s::main(){
 echo "判断服务器位置为:$server_location"
 
 #### 执行函数区域 ####
+[[ $memory -lt 1024 || $options_swap -eq 1 ]] && manager::swap
 [[ $options_install -eq 1 ]] && toolbox::install
-[[ $options_yum -eq 1 ]] && conf::reposource
-[[ $options_swap -eq 1 ]] && manager::swap
+[[ $options_yum -eq 1 ]] && conf::reposource && install::main
 [[ $installlock -eq 0 ]] && install::main && touch /root/.toolbox-install-init.lock
 [[ $options_bt -eq 1 ]] && install::bt
 [[ $options_kernel_update -eq 1 ]] && install::kernel
